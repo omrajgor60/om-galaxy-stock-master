@@ -51,10 +51,9 @@ interface Product {
   id: string;
   name: string;
   model: string;
-  brand: string | null;
+  category: string | null;
   color: string | null;
-  ram: string | null;
-  storage: string | null;
+  specs: string | null;
 }
 
 interface ScannedItem {
@@ -286,7 +285,7 @@ export default function ScannerPage() {
                 {selectedProduct ? (
                   <span>
                     {selectedProduct.name} {selectedProduct.color && `- ${selectedProduct.color}`}{" "}
-                    {selectedProduct.ram && `(${selectedProduct.ram})`}
+                    {selectedProduct.specs && `(${selectedProduct.specs})`}
                   </span>
                 ) : (
                   <span className="text-muted-foreground">Select a product...</span>
@@ -318,8 +317,8 @@ export default function ScannerPage() {
                         <div>
                           <p className="font-medium">{product.name}</p>
                           <p className="text-xs text-muted-foreground">
-                            {product.brand} {product.color && `• ${product.color}`}{" "}
-                            {product.ram && `• ${product.ram}`}
+                            {product.category} {product.color && `• ${product.color}`}{" "}
+                            {product.specs && `• ${product.specs}`}
                           </p>
                         </div>
                       </CommandItem>
