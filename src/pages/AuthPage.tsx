@@ -10,10 +10,13 @@ import { Loader2, Store, AlertCircle } from "lucide-react";
 
 export default function AuthPage() {
   const navigate = useNavigate();
-  const { signIn, user } = useAuth();
+  const { signIn, signUp, user } = useAuth();
+  const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   // Redirect if already logged in
@@ -25,18 +28,39 @@ export default function AuthPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setSuccess("");
     setIsLoading(true);
 
     try {
-      const { error: signInError } = await signIn(email, password);
-      if (signInError) {
-        if (signInError.message.includes("Invalid login credentials")) {
-          setError("Invalid email or password. Please try again.");
+      if (isSignUp) {
+        if (!fullName.trim()) {
+          setError("Please enter your full name.");
+          setIsLoading(false);
+          return;
+        }
+        const { error: signUpError } = await signUp(email, password, fullName);
+        if (signUpError) {
+          if (signUpError.message.includes("already registered")) {
+            setError("This email is already registered. Please sign in instead.");
+          } else {
+            setError(signUpError.message);
+          }
         } else {
-          setError(signInError.message);
+          setSuccess("Account created successfully! You can now sign in.");
+          setIsSignUp(false);
+          setPassword("");
         }
       } else {
-        navigate("/dashboard");
+        const { error: signInError } = await signIn(email, password);
+        if (signInError) {
+          if (signInError.message.includes("Invalid login credentials")) {
+            setError("Invalid email or password. Please try again.");
+          } else {
+            setError(signInError.message);
+          }
+        } else {
+          navigate("/dashboard");
+        }
       }
     } catch (err) {
       setError("An unexpected error occurred. Please try again.");
@@ -62,7 +86,7 @@ export default function AuthPage() {
           </div>
           <CardTitle className="text-2xl font-bold text-gradient">Om Galaxy</CardTitle>
           <CardDescription className="text-muted-foreground">
-            Stock Taker Management System
+            {isSignUp ? "Create your account" : "Stock Taker Management System"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -72,6 +96,28 @@ export default function AuthPage() {
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
+            )}
+
+            {success && (
+              <Alert className="border-green-500 bg-green-500/10 text-green-500">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{success}</AlertDescription>
+              </Alert>
+            )}
+
+            {isSignUp && (
+              <div className="space-y-2">
+                <Label htmlFor="fullName">Full Name</Label>
+                <Input
+                  id="fullName"
+                  type="text"
+                  placeholder="Enter your full name"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  required
+                  className="bg-muted/50"
+                />
+              </div>
             )}
 
             <div className="space-y-2">
@@ -96,6 +142,7 @@ export default function AuthPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                minLength={6}
                 className="bg-muted/50"
               />
             </div>
@@ -108,17 +155,27 @@ export default function AuthPage() {
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Signing in...
+                  {isSignUp ? "Creating account..." : "Signing in..."}
                 </>
               ) : (
-                "Sign In"
+                isSignUp ? "Sign Up" : "Sign In"
               )}
             </Button>
           </form>
 
-          <p className="text-center text-sm text-muted-foreground mt-6">
-            Contact your administrator for account access
-          </p>
+          <div className="mt-6 text-center">
+            <button
+              type="button"
+              onClick={() => {
+                setIsSignUp(!isSignUp);
+                setError("");
+                setSuccess("");
+              }}
+              className="text-sm text-primary hover:underline"
+            >
+              {isSignUp ? "Already have an account? Sign in" : "Don't have an account? Sign up"}
+            </button>
+          </div>
         </CardContent>
       </Card>
     </div>
