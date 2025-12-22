@@ -7,17 +7,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { ComboboxWithAdd } from "@/components/ui/combobox-with-add";
 import { toast } from "sonner";
-import { Package, Plus, Search, Edit } from "lucide-react";
+import { Package, Plus, Search } from "lucide-react";
 
 interface Product {
   id: string;
   name: string;
   model: string;
-  brand: string | null;
+  category: string | null;
   color: string | null;
-  ram: string | null;
-  storage: string | null;
+  specs: string | null;
   price: number;
   low_stock_threshold: number;
   stock_count?: number;
@@ -28,9 +28,22 @@ export default function InventoryPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState("");
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [newProduct, setNewProduct] = useState({ name: "", model: "", brand: "", color: "", ram: "", storage: "", price: "", low_stock_threshold: "5" });
+  
+  // Form state
+  const [category, setCategory] = useState("");
+  const [model, setModel] = useState("");
+  const [specs, setSpecs] = useState("");
+  const [color, setColor] = useState("");
+  const [price, setPrice] = useState("");
 
-  useEffect(() => { fetchProducts(); }, []);
+  // Unique values for dropdowns
+  const [categories, setCategories] = useState<string[]>([]);
+  const [specsList, setSpecsList] = useState<string[]>([]);
+  const [colors, setColors] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
 
   const fetchProducts = async () => {
     const { data } = await supabase.from("products").select("*").order("name");
@@ -40,17 +53,48 @@ export default function InventoryPage() {
         return { ...p, stock_count: count || 0 };
       }));
       setProducts(withStock);
+
+      // Extract unique values for dropdowns
+      const uniqueCategories = [...new Set(data.map(p => p.category).filter(Boolean))] as string[];
+      const uniqueSpecs = [...new Set(data.map(p => p.specs).filter(Boolean))] as string[];
+      const uniqueColors = [...new Set(data.map(p => p.color).filter(Boolean))] as string[];
+      
+      setCategories(uniqueCategories);
+      setSpecsList(uniqueSpecs);
+      setColors(uniqueColors);
     }
   };
 
   const addProduct = async () => {
+    // Auto-generate name from fields
+    const generatedName = [category, model, specs, color].filter(Boolean).join(" ");
+
     const { error } = await supabase.from("products").insert({
-      name: newProduct.name, model: newProduct.model, brand: newProduct.brand || null,
-      color: newProduct.color || null, ram: newProduct.ram || null, storage: newProduct.storage || null,
-      price: parseFloat(newProduct.price) || 0, low_stock_threshold: parseInt(newProduct.low_stock_threshold) || 5
+      name: generatedName,
+      model: model,
+      category: category || null,
+      color: color || null,
+      specs: specs || null,
+      price: parseFloat(price) || 0,
+      low_stock_threshold: 5
     });
-    if (error) toast.error(error.message);
-    else { toast.success("Product added!"); setShowAddDialog(false); fetchProducts(); setNewProduct({ name: "", model: "", brand: "", color: "", ram: "", storage: "", price: "", low_stock_threshold: "5" }); }
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Product added!");
+      setShowAddDialog(false);
+      fetchProducts();
+      resetForm();
+    }
+  };
+
+  const resetForm = () => {
+    setCategory("");
+    setModel("");
+    setSpecs("");
+    setColor("");
+    setPrice("");
   };
 
   const getStockBadge = (count: number, threshold: number) => {
@@ -60,7 +104,13 @@ export default function InventoryPage() {
     return <Badge className="bg-stock-ok text-success-foreground">In Stock ({count})</Badge>;
   };
 
-  const filtered = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.model.toLowerCase().includes(search.toLowerCase()));
+  const filtered = products.filter(p => 
+    p.name?.toLowerCase().includes(search.toLowerCase()) || 
+    p.model?.toLowerCase().includes(search.toLowerCase()) ||
+    p.category?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const isFormValid = category && model && price;
 
   return (
     <div className="space-y-6">
@@ -84,29 +134,87 @@ export default function InventoryPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">{product.brand} • {product.color} • {product.ram}</p>
+              <p className="text-sm text-muted-foreground">
+                {product.category} • {product.specs} • {product.color}
+              </p>
               <p className="text-lg font-bold text-primary mt-2">₹{product.price.toLocaleString()}</p>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent>
+      <Dialog open={showAddDialog} onOpenChange={(open) => { setShowAddDialog(open); if (!open) resetForm(); }}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader><DialogTitle>Add Product</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div><Label>Name *</Label><Input value={newProduct.name} onChange={(e) => setNewProduct({...newProduct, name: e.target.value})} /></div>
-              <div><Label>Model *</Label><Input value={newProduct.model} onChange={(e) => setNewProduct({...newProduct, model: e.target.value})} /></div>
-              <div><Label>Brand</Label><Input value={newProduct.brand} onChange={(e) => setNewProduct({...newProduct, brand: e.target.value})} /></div>
-              <div><Label>Color</Label><Input value={newProduct.color} onChange={(e) => setNewProduct({...newProduct, color: e.target.value})} /></div>
-              <div><Label>RAM</Label><Input value={newProduct.ram} onChange={(e) => setNewProduct({...newProduct, ram: e.target.value})} /></div>
-              <div><Label>Storage</Label><Input value={newProduct.storage} onChange={(e) => setNewProduct({...newProduct, storage: e.target.value})} /></div>
-              <div><Label>Price (₹) *</Label><Input type="number" value={newProduct.price} onChange={(e) => setNewProduct({...newProduct, price: e.target.value})} /></div>
-              <div><Label>Low Stock Threshold</Label><Input type="number" value={newProduct.low_stock_threshold} onChange={(e) => setNewProduct({...newProduct, low_stock_threshold: e.target.value})} /></div>
+            {/* 1. Category */}
+            <div className="space-y-2">
+              <Label>1. Category *</Label>
+              <ComboboxWithAdd
+                value={category}
+                onChange={setCategory}
+                options={categories}
+                placeholder="Select category"
+                emptyText="No categories yet"
+              />
             </div>
+
+            {/* 2. Model */}
+            <div className="space-y-2">
+              <Label>2. Model *</Label>
+              <Input 
+                value={model} 
+                onChange={(e) => setModel(e.target.value)} 
+                placeholder="e.g. Galaxy S24 Ultra"
+              />
+            </div>
+
+            {/* 3. Specs */}
+            <div className="space-y-2">
+              <Label>3. Specs</Label>
+              <ComboboxWithAdd
+                value={specs}
+                onChange={setSpecs}
+                options={specsList}
+                placeholder="Select specs (e.g. 8/128)"
+                emptyText="No specs yet"
+              />
+            </div>
+
+            {/* 4. Colour */}
+            <div className="space-y-2">
+              <Label>4. Colour</Label>
+              <ComboboxWithAdd
+                value={color}
+                onChange={setColor}
+                options={colors}
+                placeholder="Select colour"
+                emptyText="No colours yet"
+              />
+            </div>
+
+            {/* 5. Price */}
+            <div className="space-y-2">
+              <Label>5. Price (₹) *</Label>
+              <Input 
+                type="number" 
+                value={price} 
+                onChange={(e) => setPrice(e.target.value)} 
+                placeholder="Enter price"
+              />
+            </div>
+
+            {/* Preview */}
+            {(category || model) && (
+              <div className="p-3 rounded-lg bg-muted/50 border">
+                <p className="text-xs text-muted-foreground mb-1">Product name preview:</p>
+                <p className="font-medium">{[category, model, specs, color].filter(Boolean).join(" ") || "..."}</p>
+              </div>
+            )}
           </div>
-          <DialogFooter><Button onClick={addProduct} disabled={!newProduct.name || !newProduct.model}>Add Product</Button></DialogFooter>
+          <DialogFooter>
+            <Button onClick={addProduct} disabled={!isFormValid}>Add Product</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
