@@ -5,24 +5,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Command,
   CommandEmpty,
@@ -44,6 +35,7 @@ import {
   List,
   AlertTriangle,
   ChevronsUpDown,
+  Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -69,15 +61,18 @@ export default function ScannerPage() {
   const { playSound } = useSoundEffects();
   const inputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const barcodeDetectorRef = useRef<any>(null);
+  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const confirmBtnRef = useRef<HTMLButtonElement>(null);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [productOpen, setProductOpen] = useState(false);
   const [scanInput, setScanInput] = useState("");
   const [sessionScans, setSessionScans] = useState<ScannedItem[]>([]);
-  const [showVerifyDialog, setShowVerifyDialog] = useState(false);
   const [pendingScan, setPendingScan] = useState<string | null>(null);
-  const [isBatchMode, setIsBatchMode] = useState(false);
+  const [isPendingDuplicate, setIsPendingDuplicate] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [showSessionList, setShowSessionList] = useState(false);
@@ -85,14 +80,46 @@ export default function ScannerPage() {
   // Fetch products on mount
   useEffect(() => {
     fetchProducts();
+    initBarcodeDetector();
+    return () => stopCamera();
   }, []);
 
-  // Auto-focus input
+  // Auto-focus input when not in verification mode
   useEffect(() => {
-    if (inputRef.current && !showCamera) {
+    if (inputRef.current && !showCamera && !pendingScan) {
       inputRef.current.focus();
     }
-  }, [selectedProduct, showCamera, showVerifyDialog]);
+  }, [selectedProduct, showCamera, pendingScan]);
+
+  // Auto-focus confirm button when verification appears
+  useEffect(() => {
+    if (pendingScan && !isPendingDuplicate && confirmBtnRef.current) {
+      setTimeout(() => confirmBtnRef.current?.focus(), 50);
+    }
+  }, [pendingScan, isPendingDuplicate]);
+
+  const initBarcodeDetector = async () => {
+    if (!("BarcodeDetector" in window)) return;
+
+    try {
+      // Dynamically get all supported formats
+      const supportedFormats = await (window as any).BarcodeDetector.getSupportedFormats();
+      if (supportedFormats && supportedFormats.length > 0) {
+        barcodeDetectorRef.current = new (window as any).BarcodeDetector({
+          formats: supportedFormats,
+        });
+      }
+    } catch {
+      // Fallback to common formats
+      barcodeDetectorRef.current = new (window as any).BarcodeDetector({
+        formats: [
+          "qr_code", "aztec", "code_128", "code_39", "code_93",
+          "codabar", "data_matrix", "ean_13", "ean_8", "itf",
+          "pdf417", "upc_a", "upc_e"
+        ],
+      });
+    }
+  };
 
   const fetchProducts = async () => {
     const { data } = await supabase.from("products").select("*").order("name");
@@ -100,6 +127,10 @@ export default function ScannerPage() {
   };
 
   const checkDuplicate = async (imei: string): Promise<boolean> => {
+    // Check session scans first
+    if (sessionScans.some(s => s.imei === imei)) return true;
+    
+    // Check database
     const { data } = await supabase
       .from("stock_logs")
       .select("id")
@@ -110,7 +141,7 @@ export default function ScannerPage() {
 
   const handleScan = useCallback(async () => {
     if (!scanInput.trim()) return;
-    if (!selectedProduct && !isBatchMode) {
+    if (!selectedProduct) {
       playSound("warning");
       toast.error("Please select a product first");
       return;
@@ -118,26 +149,26 @@ export default function ScannerPage() {
 
     const imei = scanInput.trim();
     setIsScanning(true);
+    setScanInput("");
 
     // Check for duplicate
     const isDuplicate = await checkDuplicate(imei);
+    
+    // Show inline verification panel
+    setPendingScan(imei);
+    setIsPendingDuplicate(isDuplicate);
+    
     if (isDuplicate) {
       playSound("error");
-      toast.error("Duplicate IMEI! This item has already been scanned.");
-      setScanInput("");
-      setIsScanning(false);
-      return;
+    } else {
+      playSound("beep");
     }
-
-    // Show verification dialog
-    setPendingScan(imei);
-    setShowVerifyDialog(true);
-    playSound("beep");
+    
     setIsScanning(false);
-  }, [scanInput, selectedProduct, isBatchMode, playSound]);
+  }, [scanInput, selectedProduct, playSound, sessionScans]);
 
   const confirmScan = async () => {
-    if (!pendingScan || !selectedProduct || !user) return;
+    if (!pendingScan || !selectedProduct || !user || isPendingDuplicate) return;
 
     const { data, error } = await supabase
       .from("stock_logs")
@@ -155,7 +186,7 @@ export default function ScannerPage() {
       toast.error("Failed to save scan: " + error.message);
     } else {
       playSound("success");
-      toast.success("Scan saved successfully!");
+      toast.success("Scan saved!");
 
       // Add to session list
       setSessionScans((prev) => [
@@ -170,19 +201,17 @@ export default function ScannerPage() {
     }
 
     setPendingScan(null);
-    setScanInput("");
-    setShowVerifyDialog(false);
+    setIsPendingDuplicate(false);
     inputRef.current?.focus();
   };
 
   const rescan = () => {
     setPendingScan(null);
-    setScanInput("");
-    setShowVerifyDialog(false);
+    setIsPendingDuplicate(false);
     inputRef.current?.focus();
   };
 
-  // Handle Enter key for scan
+  // Handle Enter key for scan or confirm
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -190,68 +219,128 @@ export default function ScannerPage() {
     }
   };
 
-  // Camera scanning with BarcodeDetector
+  // Handle Enter key on verification panel
+  const handleVerificationKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !isPendingDuplicate) {
+      e.preventDefault();
+      confirmScan();
+    }
+  };
+
+  // Camera scanning with enhanced BarcodeDetector
   const startCamera = async () => {
+    const getStream = async (constraints: MediaStreamConstraints) => {
+      return navigator.mediaDevices.getUserMedia(constraints);
+    };
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
+      // Attempt 1: HD with environment camera (best for scanning)
+      streamRef.current = await getStream({
+        video: { 
+          facingMode: "environment",
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        }
       });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        setShowCamera(true);
-
-        // Check for BarcodeDetector support
-        if ("BarcodeDetector" in window) {
-          const barcodeDetector = new (window as any).BarcodeDetector({
-            formats: ["code_128", "code_39", "ean_13", "ean_8", "upc_a", "upc_e", "qr_code"],
-          });
-
-          const detectBarcode = async () => {
-            if (!videoRef.current || !showCamera) return;
-
-            try {
-              const barcodes = await barcodeDetector.detect(videoRef.current);
-              if (barcodes.length > 0) {
-                const code = barcodes[0].rawValue;
-                setScanInput(code);
-                stopCamera();
-                handleScan();
-              }
-            } catch (err) {
-              // Detection failed, continue scanning
-            }
-
-            if (showCamera) {
-              requestAnimationFrame(detectBarcode);
-            }
-          };
-
-          requestAnimationFrame(detectBarcode);
-        } else {
-          toast.error("Camera scanning not supported on this device");
+    } catch {
+      try {
+        // Attempt 2: Standard environment camera
+        streamRef.current = await getStream({
+          video: { facingMode: "environment" }
+        });
+      } catch {
+        try {
+          // Attempt 3: Any camera (fallback for desktop)
+          streamRef.current = await getStream({ video: true });
+        } catch {
+          toast.error("Could not access camera. Check permissions.");
+          return;
         }
       }
-    } catch (err) {
-      toast.error("Failed to access camera");
+    }
+
+    setShowCamera(true);
+
+    setTimeout(() => {
+      if (videoRef.current && streamRef.current) {
+        videoRef.current.srcObject = streamRef.current;
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play().catch(() => {});
+        };
+        startDetecting();
+      }
+    }, 100);
+  };
+
+  const startDetecting = () => {
+    if (!barcodeDetectorRef.current || !videoRef.current) {
+      toast.error("Camera scanning not supported on this device");
+      return;
+    }
+
+    scanIntervalRef.current = setInterval(async () => {
+      if (!videoRef.current || pendingScan) return;
+      
+      try {
+        const barcodes = await barcodeDetectorRef.current.detect(videoRef.current);
+        if (barcodes.length > 0) {
+          const rawValue = barcodes[0].rawValue;
+          if (rawValue) {
+            setScanInput(rawValue);
+            // Auto-trigger scan
+            handleScanFromCamera(rawValue);
+          }
+        }
+      } catch {
+        // Detection failed, continue
+      }
+    }, 500);
+  };
+
+  const handleScanFromCamera = async (code: string) => {
+    if (!selectedProduct) {
+      playSound("warning");
+      toast.error("Please select a product first");
+      return;
+    }
+
+    const isDuplicate = await checkDuplicate(code);
+    setPendingScan(code);
+    setIsPendingDuplicate(isDuplicate);
+    
+    if (isDuplicate) {
+      playSound("error");
+    } else {
+      playSound("beep");
     }
   };
 
   const stopCamera = () => {
-    if (videoRef.current?.srcObject) {
-      const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
-      tracks.forEach((track) => track.stop());
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
     }
     setShowCamera(false);
   };
 
+  const getProductDisplayName = (product: Product | null) => {
+    if (!product) return "";
+    return `${product.name} ${product.color || ""} ${product.specs || ""}`.trim();
+  };
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
+      {/* Header with Session Counter */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Stock Scanner</h1>
           <p className="text-muted-foreground">Scan products to add to inventory</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           <Button
             variant="outline"
             size="sm"
@@ -259,12 +348,12 @@ export default function ScannerPage() {
             className="gap-2"
           >
             <List className="h-4 w-4" />
-            Session ({sessionScans.length})
+            Session: {sessionScans.length} Pcs
           </Button>
         </div>
       </div>
 
-      {/* Product Selection */}
+      {/* Product Selection with Click to View Scans */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
@@ -273,7 +362,7 @@ export default function ScannerPage() {
           </CardTitle>
           <CardDescription>Choose the product you're scanning</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           <Popover open={productOpen} onOpenChange={setProductOpen}>
             <PopoverTrigger asChild>
               <Button
@@ -306,6 +395,7 @@ export default function ScannerPage() {
                         onSelect={() => {
                           setSelectedProduct(product);
                           setProductOpen(false);
+                          setSessionScans([]); // Reset session when product changes
                         }}
                       >
                         <Check
@@ -328,108 +418,234 @@ export default function ScannerPage() {
               </Command>
             </PopoverContent>
           </Popover>
+
+          {/* View scanned items link */}
+          {selectedProduct && sessionScans.length > 0 && (
+            <button
+              onClick={() => setShowSessionList(true)}
+              className="flex items-center gap-1 text-xs text-primary hover:underline"
+            >
+              <Eye className="h-3 w-3" />
+              View {sessionScans.length} scanned items
+            </button>
+          )}
         </CardContent>
       </Card>
 
-      {/* Scanner Input */}
-      <Card className={cn(selectedProduct ? "border-primary/50" : "opacity-75")}>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <ScanBarcode className="h-5 w-5" />
-            Scan IMEI / Barcode
-          </CardTitle>
-          <CardDescription>
-            {selectedProduct
-              ? `Scanning for: ${selectedProduct.name}`
-              : "Select a product above first"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="relative">
-            <Input
-              ref={inputRef}
-              value={scanInput}
-              onChange={(e) => setScanInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Scan or enter IMEI/barcode..."
-              className="h-16 text-xl font-mono scanner-input"
-              disabled={!selectedProduct}
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute right-2 top-1/2 -translate-y-1/2"
-              onClick={startCamera}
-              disabled={!selectedProduct}
-            >
-              <Camera className="h-5 w-5" />
-            </Button>
-          </div>
+      {/* Inline Verification Panel (replaces dialog when scanning) */}
+      {pendingScan ? (
+        <Card 
+          className={cn(
+            "border-2 animate-in zoom-in-95 duration-200",
+            isPendingDuplicate ? "border-destructive bg-destructive/5" : "border-primary"
+          )}
+          onKeyDown={handleVerificationKeyDown}
+          tabIndex={0}
+        >
+          <CardContent className="p-6">
+            <div className="text-center space-y-4">
+              <h3 className={cn(
+                "text-sm font-bold uppercase tracking-widest",
+                isPendingDuplicate ? "text-destructive" : "text-muted-foreground"
+              )}>
+                {isPendingDuplicate ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    Duplicate Detected
+                  </span>
+                ) : (
+                  "Verify Scan"
+                )}
+              </h3>
 
-          <div className="flex gap-2">
-            <Button
-              onClick={handleScan}
-              disabled={!selectedProduct || !scanInput.trim() || isScanning}
-              className="flex-1 gradient-primary"
-            >
-              {isScanning ? (
-                <RefreshCw className="h-4 w-4 animate-spin mr-2" />
-              ) : (
-                <Check className="h-4 w-4 mr-2" />
-              )}
-              Confirm Scan
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+              <div className={cn(
+                "p-4 rounded-lg border",
+                isPendingDuplicate 
+                  ? "bg-destructive/10 border-destructive/30" 
+                  : "bg-muted border-border"
+              )}>
+                <p className="font-mono text-2xl md:text-3xl font-bold break-all">
+                  {pendingScan}
+                </p>
+                {isPendingDuplicate && (
+                  <p className="text-destructive text-xs font-bold uppercase mt-2 animate-pulse">
+                    This barcode has already been scanned!
+                  </p>
+                )}
+              </div>
 
-      {/* Camera View */}
-      {showCamera && (
-        <Card>
-          <CardContent className="p-4">
-            <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute inset-0 border-2 border-primary/50 m-8 rounded-lg" />
-              <Button
-                variant="destructive"
-                size="sm"
-                className="absolute top-4 right-4"
-                onClick={stopCamera}
-              >
-                <X className="h-4 w-4 mr-2" />
-                Close Camera
-              </Button>
+              <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+                <p className="text-xs text-muted-foreground mb-1">Product</p>
+                <p className="font-medium">{getProductDisplayName(selectedProduct)}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 pt-2">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={rescan}
+                  className="h-14 flex flex-col gap-1"
+                >
+                  <RefreshCw className="h-5 w-5" />
+                  <span>Re-Scan</span>
+                </Button>
+                <Button
+                  ref={confirmBtnRef}
+                  size="lg"
+                  onClick={confirmScan}
+                  disabled={isPendingDuplicate}
+                  className={cn(
+                    "h-14 flex flex-col gap-1",
+                    isPendingDuplicate 
+                      ? "bg-destructive/20 text-destructive cursor-not-allowed" 
+                      : "gradient-primary"
+                  )}
+                >
+                  {isPendingDuplicate ? (
+                    <>
+                      <X className="h-5 w-5" />
+                      <span>Blocked</span>
+                    </>
+                  ) : (
+                    <>
+                      <ChevronRight className="h-5 w-5" />
+                      <span>Scan Next</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                {isPendingDuplicate 
+                  ? "Please Re-Scan a different item" 
+                  : "Press Enter to confirm"
+                }
+              </p>
             </div>
           </CardContent>
         </Card>
+      ) : (
+        <>
+          {/* Scanner Input (hidden when verification is shown) */}
+          <Card className={cn(selectedProduct ? "border-primary/50" : "opacity-75")}>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <ScanBarcode className="h-5 w-5" />
+                Scan IMEI / Barcode
+              </CardTitle>
+              <CardDescription>
+                {selectedProduct
+                  ? `Scanning for: ${selectedProduct.name}`
+                  : "Select a product above first"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="relative">
+                <Input
+                  ref={inputRef}
+                  value={scanInput}
+                  onChange={(e) => setScanInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Scan or enter IMEI/barcode..."
+                  className="h-16 text-xl font-mono scanner-input pr-12"
+                  disabled={!selectedProduct}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-2 top-1/2 -translate-y-1/2"
+                  onClick={showCamera ? stopCamera : startCamera}
+                  disabled={!selectedProduct}
+                >
+                  {showCamera ? (
+                    <X className="h-5 w-5 text-destructive" />
+                  ) : (
+                    <Camera className="h-5 w-5" />
+                  )}
+                </Button>
+              </div>
+
+              <Button
+                onClick={handleScan}
+                disabled={!selectedProduct || !scanInput.trim() || isScanning}
+                className="w-full gradient-primary"
+              >
+                {isScanning ? (
+                  <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Check className="h-4 w-4 mr-2" />
+                )}
+                Submit Scan
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Camera View with Scan Line */}
+          {showCamera && (
+            <Card>
+              <CardContent className="p-4">
+                <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                  />
+                  {/* Scan line animation */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-4/5 h-0.5 bg-destructive shadow-[0_0_10px_hsl(var(--destructive))] animate-pulse" />
+                  </div>
+                  {/* Corner guides */}
+                  <div className="absolute inset-8 border-2 border-primary/50 rounded-lg pointer-events-none" />
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="absolute top-4 right-4"
+                    onClick={stopCamera}
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Close
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
 
-      {/* Recent Scans */}
-      {sessionScans.length > 0 && (
+      {/* Recent Scans - Enhanced Display */}
+      {sessionScans.length > 0 && !pendingScan && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Recent Scans</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg">Recent Scans</CardTitle>
+              <span className="text-xs text-muted-foreground">Last 5 items</span>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {sessionScans.slice(0, 5).map((scan) => (
+              {sessionScans.slice(0, 5).map((scan, index) => (
                 <div
                   key={scan.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
+                  className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted/70 transition"
                 >
-                  <div>
-                    <p className="font-mono text-sm">{scan.imei}</p>
-                    <p className="text-xs text-muted-foreground">{scan.product_name}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-mono text-sm md:text-base font-medium truncate text-primary">
+                      {scan.imei}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {scan.product_name}
+                    </p>
                   </div>
-                  <Badge variant="outline" className="text-success border-success">
-                    <Check className="h-3 w-3 mr-1" />
-                    Saved
-                  </Badge>
+                  <div className="flex items-center gap-2 ml-2">
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      {new Date(scan.scanned_at).toLocaleTimeString()}
+                    </span>
+                    <Badge variant="outline" className="text-success border-success shrink-0">
+                      <Check className="h-3 w-3" />
+                    </Badge>
+                  </div>
                 </div>
               ))}
             </div>
@@ -437,75 +653,61 @@ export default function ScannerPage() {
         </Card>
       )}
 
-      {/* Verification Dialog */}
-      <Dialog open={showVerifyDialog} onOpenChange={setShowVerifyDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-warning" />
-              Verify Scan
-            </DialogTitle>
-            <DialogDescription>Please confirm this scan is correct</DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="p-4 rounded-lg bg-muted text-center">
-              <p className="text-xs text-muted-foreground mb-1">Scanned Code</p>
-              <p className="text-2xl font-mono font-bold">{pendingScan}</p>
-            </div>
-
-            <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
-              <p className="text-xs text-muted-foreground mb-1">Product</p>
-              <p className="font-medium">
-                {selectedProduct?.name} {selectedProduct?.color && `(${selectedProduct.color})`}
-              </p>
-            </div>
-          </div>
-
-          <DialogFooter className="flex gap-2 sm:gap-0">
-            <Button variant="outline" onClick={rescan} className="flex-1">
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Re-Scan
-            </Button>
-            <Button onClick={confirmScan} className="flex-1 gradient-primary">
-              <ChevronRight className="h-4 w-4 mr-2" />
-              Confirm & Next
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Session List Dialog */}
       <Dialog open={showSessionList} onOpenChange={setShowSessionList}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Session Scans ({sessionScans.length})</DialogTitle>
-            <DialogDescription>All items scanned in this session</DialogDescription>
+            <DialogTitle className="flex items-center gap-2">
+              Session Scans
+              <Badge variant="secondary">{sessionScans.length} Pcs</Badge>
+            </DialogTitle>
+            <DialogDescription>
+              {selectedProduct 
+                ? `All items scanned for ${selectedProduct.name}`
+                : "All items scanned in this session"
+              }
+            </DialogDescription>
           </DialogHeader>
 
           <ScrollArea className="h-80">
             {sessionScans.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">No scans yet</p>
+              <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+                <Package className="h-12 w-12 mb-2 opacity-50" />
+                <p>No items scanned yet</p>
+              </div>
             ) : (
-              <div className="space-y-2">
-                {sessionScans.map((scan) => (
+              <div className="space-y-1">
+                <div className="grid grid-cols-[2rem_1fr_1fr_auto] gap-2 text-xs text-muted-foreground uppercase tracking-wider p-2 bg-muted/50 rounded sticky top-0">
+                  <span>#</span>
+                  <span>Barcode/IMEI</span>
+                  <span>Product</span>
+                  <span>Time</span>
+                </div>
+                {sessionScans.map((scan, index) => (
                   <div
                     key={scan.id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
+                    className="grid grid-cols-[2rem_1fr_1fr_auto] gap-2 items-center p-2 rounded hover:bg-muted/50 text-sm"
                   >
-                    <div>
-                      <p className="font-mono text-sm">{scan.imei}</p>
-                      <p className="text-xs text-muted-foreground">{scan.product_name}</p>
-                    </div>
-                    <Badge variant="outline" className="text-success border-success">
-                      <Check className="h-3 w-3 mr-1" />
-                      Saved
-                    </Badge>
+                    <span className="text-muted-foreground">{sessionScans.length - index}</span>
+                    <span className="font-mono text-primary truncate">{scan.imei}</span>
+                    <span className="truncate">{scan.product_name}</span>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      {new Date(scan.scanned_at).toLocaleTimeString()}
+                    </span>
                   </div>
                 ))}
               </div>
             )}
           </ScrollArea>
+
+          <div className="flex justify-between items-center pt-2 border-t">
+            <span className="text-sm text-muted-foreground">
+              Total: {sessionScans.length} items
+            </span>
+            <Button onClick={() => setShowSessionList(false)}>
+              Close & Resume
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
