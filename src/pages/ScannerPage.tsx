@@ -208,7 +208,12 @@ export default function ScannerPage() {
   const rescan = () => {
     setPendingScan(null);
     setIsPendingDuplicate(false);
-    inputRef.current?.focus();
+    setScanInput(""); // Clear any leftover input
+    
+    // Small delay to ensure state is cleared before focusing
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 50);
   };
 
   // Handle Enter key for scan or confirm
@@ -219,11 +224,15 @@ export default function ScannerPage() {
     }
   };
 
-  // Handle Enter key on verification panel
+  // Handle Enter/Escape key on verification panel
   const handleVerificationKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !isPendingDuplicate) {
       e.preventDefault();
       confirmScan();
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      rescan();
     }
   };
 
