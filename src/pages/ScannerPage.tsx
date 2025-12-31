@@ -210,10 +210,20 @@ export default function ScannerPage() {
     setIsPendingDuplicate(false);
     setScanInput(""); // Clear any leftover input
     
-    // Small delay to ensure state is cleared before focusing
-    setTimeout(() => {
-      inputRef.current?.focus();
-    }, 50);
+    // If camera is active, reattach stream and resume detection (no keyboard)
+    if (showCamera && streamRef.current && videoRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
+      // Resume detection if not already running
+      if (!scanIntervalRef.current) {
+        startDetecting();
+      }
+    } else {
+      // Only focus input if camera is not active
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 50);
+    }
   };
 
   // Handle Enter key for scan or confirm
