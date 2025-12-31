@@ -84,12 +84,19 @@ export default function ScannerPage() {
     return () => stopCamera();
   }, []);
 
-  // Auto-focus input when not in verification mode
+  // Auto-focus input when not in verification mode and camera is off
   useEffect(() => {
     if (inputRef.current && !showCamera && !pendingScan) {
       inputRef.current.focus();
     }
   }, [selectedProduct, showCamera, pendingScan]);
+
+  // Blur input when camera is active to prevent keyboard popup
+  useEffect(() => {
+    if (showCamera) {
+      inputRef.current?.blur();
+    }
+  }, [showCamera, pendingScan]);
 
   // Auto-focus confirm button when verification appears
   useEffect(() => {
@@ -97,6 +104,25 @@ export default function ScannerPage() {
       setTimeout(() => confirmBtnRef.current?.focus(), 50);
     }
   }, [pendingScan, isPendingDuplicate]);
+
+  // Helper to reattach stream to video element
+  const attachStreamToVideo = useCallback(() => {
+    if (videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+  }, []);
+
+  // Resume camera detection when pendingScan clears and camera is active
+  useEffect(() => {
+    if (!pendingScan && showCamera && streamRef.current) {
+      // Small delay to ensure DOM is ready
+      const timeout = setTimeout(() => {
+        attachStreamToVideo();
+      }, 100);
+      return () => clearTimeout(timeout);
+    }
+  }, [pendingScan, showCamera, attachStreamToVideo]);
 
   const initBarcodeDetector = async () => {
     if (!("BarcodeDetector" in window)) return;
@@ -206,24 +232,22 @@ export default function ScannerPage() {
   };
 
   const rescan = () => {
+    // Blur input immediately to prevent keyboard
+    if (showCamera) {
+      inputRef.current?.blur();
+    }
+    
     setPendingScan(null);
     setIsPendingDuplicate(false);
     setScanInput(""); // Clear any leftover input
     
-    // If camera is active, reattach stream and resume detection (no keyboard)
-    if (showCamera && streamRef.current && videoRef.current) {
-      videoRef.current.srcObject = streamRef.current;
-      videoRef.current.play().catch(() => {});
-      // Resume detection if not already running
-      if (!scanIntervalRef.current) {
-        startDetecting();
-      }
-    } else {
-      // Only focus input if camera is not active
+    // If camera is NOT active, focus input for manual scanning
+    if (!showCamera) {
       setTimeout(() => {
         inputRef.current?.focus();
       }, 50);
     }
+    // Camera resume is handled by useEffect watching pendingScan
   };
 
   // Handle Enter key for scan or confirm
@@ -451,8 +475,47 @@ export default function ScannerPage() {
         </CardContent>
       </Card>
 
-      {/* Inline Verification Panel (replaces dialog when scanning) */}
-      {pendingScan ? (
+      {/* Camera View - Always mounted when showCamera is true to prevent ref loss */}
+      {showCamera && (
+        <Card className={cn(pendingScan && "opacity-50")}>
+          <CardContent className="p-4">
+            <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover"
+              />
+              {/* Scan line animation */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-4/5 h-0.5 bg-destructive shadow-[0_0_10px_hsl(var(--destructive))] animate-pulse" />
+              </div>
+              {/* Corner guides */}
+              <div className="absolute inset-8 border-2 border-primary/50 rounded-lg pointer-events-none" />
+              {!pendingScan && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="absolute top-4 right-4"
+                  onClick={stopCamera}
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Close
+                </Button>
+              )}
+              {pendingScan && (
+                <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
+                  <p className="text-sm font-medium">Verification in progress...</p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Inline Verification Panel */}
+      {pendingScan && (
         <Card 
           className={cn(
             "border-2 animate-in zoom-in-95 duration-200",
@@ -543,94 +606,62 @@ export default function ScannerPage() {
             </div>
           </CardContent>
         </Card>
-      ) : (
-        <>
-          {/* Scanner Input (hidden when verification is shown) */}
-          <Card className={cn(selectedProduct ? "border-primary/50" : "opacity-75")}>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <ScanBarcode className="h-5 w-5" />
-                Scan IMEI / Barcode
-              </CardTitle>
-              <CardDescription>
-                {selectedProduct
-                  ? `Scanning for: ${selectedProduct.name}`
-                  : "Select a product above first"}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="relative">
-                <Input
-                  ref={inputRef}
-                  value={scanInput}
-                  onChange={(e) => setScanInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Scan or enter IMEI/barcode..."
-                  className="h-16 text-xl font-mono scanner-input pr-12"
-                  disabled={!selectedProduct}
-                />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-2 top-1/2 -translate-y-1/2"
-                  onClick={showCamera ? stopCamera : startCamera}
-                  disabled={!selectedProduct}
-                >
-                  {showCamera ? (
-                    <X className="h-5 w-5 text-destructive" />
-                  ) : (
-                    <Camera className="h-5 w-5" />
-                  )}
-                </Button>
-              </div>
+      )}
 
+      {/* Scanner Input (hidden when verification is shown) */}
+      {!pendingScan && (
+        <Card className={cn(selectedProduct ? "border-primary/50" : "opacity-75")}>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <ScanBarcode className="h-5 w-5" />
+              Scan IMEI / Barcode
+            </CardTitle>
+            <CardDescription>
+              {selectedProduct
+                ? `Scanning for: ${selectedProduct.name}`
+                : "Select a product above first"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="relative">
+              <Input
+                ref={inputRef}
+                value={scanInput}
+                onChange={(e) => setScanInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Scan or enter IMEI/barcode..."
+                className="h-16 text-xl font-mono scanner-input pr-12"
+                disabled={!selectedProduct}
+              />
               <Button
-                onClick={handleScan}
-                disabled={!selectedProduct || !scanInput.trim() || isScanning}
-                className="w-full gradient-primary"
+                variant="ghost"
+                size="icon"
+                className="absolute right-2 top-1/2 -translate-y-1/2"
+                onClick={showCamera ? stopCamera : startCamera}
+                disabled={!selectedProduct}
               >
-                {isScanning ? (
-                  <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                {showCamera ? (
+                  <X className="h-5 w-5 text-destructive" />
                 ) : (
-                  <Check className="h-4 w-4 mr-2" />
+                  <Camera className="h-5 w-5" />
                 )}
-                Submit Scan
               </Button>
-            </CardContent>
-          </Card>
+            </div>
 
-          {/* Camera View with Scan Line */}
-          {showCamera && (
-            <Card>
-              <CardContent className="p-4">
-                <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-full object-cover"
-                  />
-                  {/* Scan line animation */}
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-4/5 h-0.5 bg-destructive shadow-[0_0_10px_hsl(var(--destructive))] animate-pulse" />
-                  </div>
-                  {/* Corner guides */}
-                  <div className="absolute inset-8 border-2 border-primary/50 rounded-lg pointer-events-none" />
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="absolute top-4 right-4"
-                    onClick={stopCamera}
-                  >
-                    <X className="h-4 w-4 mr-2" />
-                    Close
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </>
+            <Button
+              onClick={handleScan}
+              disabled={!selectedProduct || !scanInput.trim() || isScanning}
+              className="w-full gradient-primary"
+            >
+              {isScanning ? (
+                <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Check className="h-4 w-4 mr-2" />
+              )}
+              Submit Scan
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
       {/* Recent Scans - Enhanced Display */}
