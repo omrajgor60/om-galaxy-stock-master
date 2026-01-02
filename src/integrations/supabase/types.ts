@@ -164,6 +164,39 @@ export type Database = {
         }
         Relationships: []
       }
+      outlets: {
+        Row: {
+          address: string | null
+          code: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          phone: string | null
+        }
+        Insert: {
+          address?: string | null
+          code: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          phone?: string | null
+        }
+        Update: {
+          address?: string | null
+          code?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          phone?: string | null
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           category: string | null
@@ -343,6 +376,7 @@ export type Database = {
           id: string
           imei: string
           notes: string | null
+          outlet_id: string | null
           product_id: string
           scanned_at: string
           scanned_by: string
@@ -353,6 +387,7 @@ export type Database = {
           id?: string
           imei: string
           notes?: string | null
+          outlet_id?: string | null
           product_id: string
           scanned_at?: string
           scanned_by: string
@@ -363,6 +398,7 @@ export type Database = {
           id?: string
           imei?: string
           notes?: string | null
+          outlet_id?: string | null
           product_id?: string
           scanned_at?: string
           scanned_by?: string
@@ -370,6 +406,13 @@ export type Database = {
           status?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "stock_logs_outlet_id_fkey"
+            columns: ["outlet_id"]
+            isOneToOne: false
+            referencedRelation: "outlets"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "stock_logs_product_id_fkey"
             columns: ["product_id"]
