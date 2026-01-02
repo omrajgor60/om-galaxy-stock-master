@@ -15,6 +15,9 @@ import InventoryPage from "@/pages/InventoryPage";
 import StaffPage from "@/pages/StaffPage";
 import RequestsPage from "@/pages/RequestsPage";
 import ExportPage from "@/pages/ExportPage";
+import OutletsPage from "@/pages/OutletsPage";
+import TransfersPage from "@/pages/TransfersPage";
+import OutletReportsPage from "@/pages/OutletReportsPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -36,7 +39,10 @@ const App = () => (
               <Route path="/sales" element={<SalesPage />} />
               <Route path="/customers" element={<CustomersPage />} />
               <Route path="/inventory" element={<InventoryPage />} />
+              <Route path="/transfers" element={<TransfersPage />} />
+              <Route path="/outlet-reports" element={<OutletReportsPage />} />
               <Route path="/staff" element={<ProtectedRoute requireAdmin><StaffPage /></ProtectedRoute>} />
+              <Route path="/outlets" element={<ProtectedRoute requireAdmin><OutletsPage /></ProtectedRoute>} />
               <Route path="/requests" element={<RequestsPage />} />
               <Route path="/export" element={<ProtectedRoute requireAdmin><ExportPage /></ProtectedRoute>} />
               <Route path="/report-issue" element={<RequestsPage />} />
