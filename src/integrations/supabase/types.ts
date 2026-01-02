@@ -422,6 +422,58 @@ export type Database = {
           },
         ]
       }
+      stock_transfers: {
+        Row: {
+          created_at: string | null
+          from_outlet_id: string
+          id: string
+          notes: string | null
+          stock_log_id: string
+          to_outlet_id: string
+          transferred_by: string
+        }
+        Insert: {
+          created_at?: string | null
+          from_outlet_id: string
+          id?: string
+          notes?: string | null
+          stock_log_id: string
+          to_outlet_id: string
+          transferred_by: string
+        }
+        Update: {
+          created_at?: string | null
+          from_outlet_id?: string
+          id?: string
+          notes?: string | null
+          stock_log_id?: string
+          to_outlet_id?: string
+          transferred_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_transfers_from_outlet_id_fkey"
+            columns: ["from_outlet_id"]
+            isOneToOne: false
+            referencedRelation: "outlets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_transfers_stock_log_id_fkey"
+            columns: ["stock_log_id"]
+            isOneToOne: false
+            referencedRelation: "stock_logs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_transfers_to_outlet_id_fkey"
+            columns: ["to_outlet_id"]
+            isOneToOne: false
+            referencedRelation: "outlets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       time_off_requests: {
         Row: {
           admin_notes: string | null
