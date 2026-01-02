@@ -36,6 +36,7 @@ import {
   AlertTriangle,
   ChevronsUpDown,
   Eye,
+  Store,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -48,10 +49,18 @@ interface Product {
   specs: string | null;
 }
 
+interface Outlet {
+  id: string;
+  name: string;
+  code: string;
+  address: string | null;
+}
+
 interface ScannedItem {
   id: string;
   imei: string;
   product_name: string;
+  outlet_name: string;
   scanned_at: string;
   is_duplicate?: boolean;
 }
@@ -69,6 +78,9 @@ export default function ScannerPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [productOpen, setProductOpen] = useState(false);
+  const [outlets, setOutlets] = useState<Outlet[]>([]);
+  const [selectedOutlet, setSelectedOutlet] = useState<Outlet | null>(null);
+  const [outletOpen, setOutletOpen] = useState(false);
   const [scanInput, setScanInput] = useState("");
   const [sessionScans, setSessionScans] = useState<ScannedItem[]>([]);
   const [pendingScan, setPendingScan] = useState<string | null>(null);
@@ -80,6 +92,7 @@ export default function ScannerPage() {
   // Fetch products on mount
   useEffect(() => {
     fetchProducts();
+    fetchOutlets();
     initBarcodeDetector();
     return () => stopCamera();
   }, []);
@@ -152,6 +165,15 @@ export default function ScannerPage() {
     if (data) setProducts(data);
   };
 
+  const fetchOutlets = async () => {
+    const { data } = await supabase
+      .from("outlets")
+      .select("*")
+      .eq("is_active", true)
+      .order("name");
+    if (data) setOutlets(data);
+  };
+
   const checkDuplicate = async (imei: string): Promise<boolean> => {
     // Check session scans first
     if (sessionScans.some(s => s.imei === imei)) return true;
@@ -167,6 +189,11 @@ export default function ScannerPage() {
 
   const handleScan = useCallback(async () => {
     if (!scanInput.trim()) return;
+    if (!selectedOutlet) {
+      playSound("warning");
+      toast.error("Please select an outlet first");
+      return;
+    }
     if (!selectedProduct) {
       playSound("warning");
       toast.error("Please select a product first");
@@ -194,7 +221,7 @@ export default function ScannerPage() {
   }, [scanInput, selectedProduct, playSound, sessionScans]);
 
   const confirmScan = async () => {
-    if (!pendingScan || !selectedProduct || !user || isPendingDuplicate) return;
+    if (!pendingScan || !selectedProduct || !selectedOutlet || !user || isPendingDuplicate) return;
 
     const { data, error } = await supabase
       .from("stock_logs")
@@ -202,6 +229,7 @@ export default function ScannerPage() {
         product_id: selectedProduct.id,
         imei: pendingScan,
         scanned_by: user.id,
+        outlet_id: selectedOutlet.id,
         status: "in_stock",
       })
       .select()
@@ -220,6 +248,7 @@ export default function ScannerPage() {
           id: data.id,
           imei: pendingScan,
           product_name: `${selectedProduct.name} ${selectedProduct.color || ""}`,
+          outlet_name: selectedOutlet.name,
           scanned_at: new Date().toISOString(),
         },
         ...prev,
@@ -341,6 +370,11 @@ export default function ScannerPage() {
   };
 
   const handleScanFromCamera = async (code: string) => {
+    if (!selectedOutlet) {
+      playSound("warning");
+      toast.error("Please select an outlet first");
+      return;
+    }
     if (!selectedProduct) {
       playSound("warning");
       toast.error("Please select a product first");
@@ -396,8 +430,74 @@ export default function ScannerPage() {
         </div>
       </div>
 
-      {/* Product Selection with Click to View Scans */}
+      {/* Outlet Selection */}
       <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Store className="h-5 w-5" />
+            Select Outlet
+          </CardTitle>
+          <CardDescription>Choose the outlet for stock entry</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Popover open={outletOpen} onOpenChange={setOutletOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={outletOpen}
+                className="w-full justify-between h-12 text-left"
+              >
+                {selectedOutlet ? (
+                  <span>
+                    {selectedOutlet.name} ({selectedOutlet.code})
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">Select an outlet...</span>
+                )}
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-full p-0" align="start">
+              <Command>
+                <CommandInput placeholder="Search outlets..." />
+                <CommandList>
+                  <CommandEmpty>No outlets found.</CommandEmpty>
+                  <CommandGroup>
+                    {outlets.map((outlet) => (
+                      <CommandItem
+                        key={outlet.id}
+                        value={`${outlet.name} ${outlet.code}`}
+                        onSelect={() => {
+                          setSelectedOutlet(outlet);
+                          setOutletOpen(false);
+                          setSessionScans([]); // Reset session when outlet changes
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            selectedOutlet?.id === outlet.id ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        <div>
+                          <p className="font-medium">{outlet.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Code: {outlet.code} {outlet.address && `• ${outlet.address}`}
+                          </p>
+                        </div>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        </CardContent>
+      </Card>
+
+      {/* Product Selection with Click to View Scans */}
+      <Card className={cn(!selectedOutlet && "opacity-50")}>
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Package className="h-5 w-5" />
@@ -556,9 +656,15 @@ export default function ScannerPage() {
                 )}
               </div>
 
-              <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
-                <p className="text-xs text-muted-foreground mb-1">Product</p>
-                <p className="font-medium">{getProductDisplayName(selectedProduct)}</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+                  <p className="text-xs text-muted-foreground mb-1">Outlet</p>
+                  <p className="font-medium">{selectedOutlet?.name}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+                  <p className="text-xs text-muted-foreground mb-1">Product</p>
+                  <p className="font-medium">{getProductDisplayName(selectedProduct)}</p>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4 pt-2">
@@ -685,7 +791,7 @@ export default function ScannerPage() {
                       {scan.imei}
                     </p>
                     <p className="text-xs text-muted-foreground truncate">
-                      {scan.product_name}
+                      {scan.product_name} • {scan.outlet_name}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 ml-2">

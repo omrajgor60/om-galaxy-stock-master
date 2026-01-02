@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,6 +44,9 @@ import {
   ChevronsUpDown,
   Search,
   Loader2,
+  Camera,
+  X,
+  Store,
 } from "lucide-react";
 
 interface Customer {
@@ -68,11 +71,22 @@ interface StockItem {
   imei: string;
   product_id: string;
   status: string;
+  outlet_id: string | null;
+}
+
+interface Outlet {
+  id: string;
+  name: string;
+  code: string;
 }
 
 export default function SalesPage() {
   const { user } = useAuth();
   const { playSound } = useSoundEffects();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const barcodeDetectorRef = useRef<any>(null);
+  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Customer state
   const [phoneSearch, setPhoneSearch] = useState("");
@@ -90,7 +104,9 @@ export default function SalesPage() {
   // IMEI state
   const [imeiInput, setImeiInput] = useState("");
   const [stockItem, setStockItem] = useState<StockItem | null>(null);
+  const [stockOutlet, setStockOutlet] = useState<Outlet | null>(null);
   const [isValidatingImei, setIsValidatingImei] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
 
   // Sale state
   const [salePrice, setSalePrice] = useState("");
@@ -100,7 +116,25 @@ export default function SalesPage() {
 
   useEffect(() => {
     fetchProducts();
+    initBarcodeDetector();
+    return () => stopCamera();
   }, []);
+
+  const initBarcodeDetector = async () => {
+    if (!("BarcodeDetector" in window)) return;
+    try {
+      const supportedFormats = await (window as any).BarcodeDetector.getSupportedFormats();
+      if (supportedFormats && supportedFormats.length > 0) {
+        barcodeDetectorRef.current = new (window as any).BarcodeDetector({
+          formats: supportedFormats,
+        });
+      }
+    } catch {
+      barcodeDetectorRef.current = new (window as any).BarcodeDetector({
+        formats: ["qr_code", "code_128", "code_39", "ean_13", "ean_8", "upc_a", "upc_e"],
+      });
+    }
+  };
 
   const fetchProducts = async () => {
     const { data } = await supabase.from("products").select("*").order("name");
@@ -162,7 +196,7 @@ export default function SalesPage() {
     setIsValidatingImei(true);
     const { data, error } = await supabase
       .from("stock_logs")
-      .select("*")
+      .select("*, outlets(id, name, code)")
       .eq("imei", imeiInput.trim())
       .eq("product_id", selectedProduct.id)
       .eq("status", "in_stock")
@@ -172,13 +206,70 @@ export default function SalesPage() {
       playSound("error");
       toast.error("IMEI not found or not available for this product");
       setStockItem(null);
+      setStockOutlet(null);
     } else {
       playSound("beep");
       setStockItem(data);
+      setStockOutlet(data.outlets || null);
       toast.success("IMEI verified!");
+      stopCamera();
     }
     setIsValidatingImei(false);
   };
+
+  // Camera scanning functions
+  const startCamera = async () => {
+    try {
+      streamRef.current = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" }
+      });
+    } catch {
+      try {
+        streamRef.current = await navigator.mediaDevices.getUserMedia({ video: true });
+      } catch {
+        toast.error("Could not access camera");
+        return;
+      }
+    }
+
+    setShowCamera(true);
+    setTimeout(() => {
+      if (videoRef.current && streamRef.current) {
+        videoRef.current.srcObject = streamRef.current;
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play().catch(() => {});
+        };
+        startDetecting();
+      }
+    }, 100);
+  };
+
+  const startDetecting = () => {
+    if (!barcodeDetectorRef.current || !videoRef.current) return;
+
+    scanIntervalRef.current = setInterval(async () => {
+      if (!videoRef.current) return;
+      try {
+        const barcodes = await barcodeDetectorRef.current.detect(videoRef.current);
+        if (barcodes.length > 0 && barcodes[0].rawValue) {
+          setImeiInput(barcodes[0].rawValue);
+          stopCamera();
+        }
+      } catch {}
+    }, 500);
+  };
+
+  const stopCamera = useCallback(() => {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+    setShowCamera(false);
+  }, []);
 
   // Process sale
   const processSale = async () => {
@@ -220,6 +311,7 @@ export default function SalesPage() {
       setSelectedProduct(null);
       setImeiInput("");
       setStockItem(null);
+      setStockOutlet(null);
       setSalePrice("");
       setDiscount("");
       setPaymentMethod("cash");
@@ -405,7 +497,33 @@ export default function SalesPage() {
             )}
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Camera View */}
+          {showCamera && (
+            <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-4/5 h-0.5 bg-destructive shadow-[0_0_10px_hsl(var(--destructive))] animate-pulse" />
+              </div>
+              <div className="absolute inset-8 border-2 border-primary/50 rounded-lg pointer-events-none" />
+              <Button
+                variant="destructive"
+                size="sm"
+                className="absolute top-4 right-4"
+                onClick={stopCamera}
+              >
+                <X className="h-4 w-4 mr-2" />
+                Close
+              </Button>
+            </div>
+          )}
+          
           <div className="flex gap-2">
             <Input
               value={imeiInput}
@@ -415,6 +533,18 @@ export default function SalesPage() {
               disabled={!selectedProduct}
               onKeyDown={(e) => e.key === "Enter" && validateImei()}
             />
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={showCamera ? stopCamera : startCamera}
+              disabled={!selectedProduct}
+            >
+              {showCamera ? (
+                <X className="h-4 w-4 text-destructive" />
+              ) : (
+                <Camera className="h-4 w-4" />
+              )}
+            </Button>
             <Button onClick={validateImei} disabled={!selectedProduct || isValidatingImei}>
               {isValidatingImei ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -424,9 +554,17 @@ export default function SalesPage() {
             </Button>
           </div>
           {stockItem && (
-            <p className="text-sm text-success mt-2">
-              ✓ IMEI {stockItem.imei} is available and ready for sale
-            </p>
+            <div className="p-3 rounded-lg bg-success/10 border border-success/30 space-y-2">
+              <p className="text-sm text-success font-medium">
+                ✓ IMEI {stockItem.imei} verified
+              </p>
+              {stockOutlet && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Store className="h-4 w-4" />
+                  <span>From: <span className="font-medium text-foreground">{stockOutlet.name}</span></span>
+                </div>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>
