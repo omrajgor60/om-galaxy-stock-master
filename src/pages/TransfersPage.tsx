@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,6 +40,8 @@ import {
   Layers,
   X,
   Plus,
+  Camera,
+  XCircle,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -96,6 +98,12 @@ export default function TransfersPage() {
   const { user } = useAuth();
   const { playSound } = useSoundEffects();
 
+  // Camera refs
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const barcodeDetectorRef = useRef<any>(null);
+  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [toOutlet, setToOutlet] = useState<Outlet | null>(null);
   const [toOutletOpen, setToOutletOpen] = useState(false);
@@ -110,12 +118,17 @@ export default function TransfersPage() {
   const [isBulkMode, setIsBulkMode] = useState(false);
   const [bulkItems, setBulkItems] = useState<BulkItem[]>([]);
   
+  // Camera state
+  const [showCamera, setShowCamera] = useState(false);
+  
   const [recentTransfers, setRecentTransfers] = useState<Transfer[]>([]);
   const [isLoadingTransfers, setIsLoadingTransfers] = useState(true);
 
   useEffect(() => {
     fetchOutlets();
     fetchRecentTransfers();
+    initBarcodeDetector();
+    return () => stopCamera();
   }, []);
 
   const fetchOutlets = async () => {
@@ -148,6 +161,130 @@ export default function TransfersPage() {
     
     if (data) setRecentTransfers(data as unknown as Transfer[]);
     setIsLoadingTransfers(false);
+  };
+
+  // Camera functions
+  const initBarcodeDetector = async () => {
+    if (!("BarcodeDetector" in window)) return;
+
+    try {
+      const supportedFormats = await (window as any).BarcodeDetector.getSupportedFormats();
+      if (supportedFormats && supportedFormats.length > 0) {
+        barcodeDetectorRef.current = new (window as any).BarcodeDetector({
+          formats: supportedFormats,
+        });
+      }
+    } catch {
+      barcodeDetectorRef.current = new (window as any).BarcodeDetector({
+        formats: [
+          "qr_code", "aztec", "code_128", "code_39", "code_93",
+          "codabar", "data_matrix", "ean_13", "ean_8", "itf",
+          "pdf417", "upc_a", "upc_e"
+        ],
+      });
+    }
+  };
+
+  const startCamera = async () => {
+    const getStream = async (constraints: MediaStreamConstraints) => {
+      return navigator.mediaDevices.getUserMedia(constraints);
+    };
+
+    try {
+      streamRef.current = await getStream({
+        video: { 
+          facingMode: "environment",
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        }
+      });
+    } catch {
+      try {
+        streamRef.current = await getStream({
+          video: { facingMode: "environment" }
+        });
+      } catch {
+        try {
+          streamRef.current = await getStream({ video: true });
+        } catch {
+          toast.error("Could not access camera. Check permissions.");
+          return;
+        }
+      }
+    }
+
+    setShowCamera(true);
+
+    setTimeout(() => {
+      if (videoRef.current && streamRef.current) {
+        videoRef.current.srcObject = streamRef.current;
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play().catch(() => {});
+        };
+        startDetecting();
+      }
+    }, 100);
+  };
+
+  const startDetecting = () => {
+    if (!barcodeDetectorRef.current || !videoRef.current) {
+      toast.error("Camera scanning not supported on this device");
+      return;
+    }
+
+    scanIntervalRef.current = setInterval(async () => {
+      if (!videoRef.current) return;
+      
+      try {
+        const barcodes = await barcodeDetectorRef.current.detect(videoRef.current);
+        if (barcodes.length > 0) {
+          const rawValue = barcodes[0].rawValue;
+          if (rawValue) {
+            handleScanFromCamera(rawValue);
+          }
+        }
+      } catch {
+        // Detection failed, continue
+      }
+    }, 500);
+  };
+
+  const handleScanFromCamera = async (code: string) => {
+    // Check if already added in bulk mode
+    if (isBulkMode && bulkItems.some(b => b.imei === code)) {
+      playSound("warning");
+      toast.warning("IMEI already in batch");
+      return;
+    }
+
+    setImeiInput(code);
+    
+    // Validate and add
+    const item = await validateImei(code);
+    if (!item) return;
+
+    if (isBulkMode) {
+      setBulkItems(prev => [...prev, { ...item, validated: true }]);
+      setImeiInput("");
+      playSound("success");
+      toast.success(`Added to batch (${bulkItems.length + 1} items)`);
+    } else {
+      setStockItem(item);
+      toast.success("IMEI verified!");
+      stopCamera();
+    }
+  };
+
+  const stopCamera = () => {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+    setShowCamera(false);
   };
 
   const validateImei = async (imei?: string) => {
@@ -362,12 +499,58 @@ export default function TransfersPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
+            {/* Camera View */}
+            {showCamera && (
+              <div className="relative rounded-lg overflow-hidden bg-black aspect-video">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-64 h-32 border-2 border-primary rounded-lg opacity-70" />
+                </div>
+                <div className="absolute top-2 right-2">
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={stopCamera}
+                  >
+                    <XCircle className="h-4 w-4 mr-1" />
+                    Close
+                  </Button>
+                </div>
+                <div className="absolute bottom-2 left-2 right-2 text-center">
+                  <Badge variant="secondary" className="bg-background/80">
+                    {isBulkMode 
+                      ? `Scanning... ${bulkItems.length} items added` 
+                      : "Point camera at barcode"}
+                  </Badge>
+                </div>
+              </div>
+            )}
+
             {/* Step 1: Scan IMEI */}
             <div className="space-y-3">
-              <Label className="flex items-center gap-2">
-                <ScanBarcode className="h-4 w-4" />
-                Step 1: Scan IMEI {isBulkMode && `(${bulkItems.length} items added)`}
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-2">
+                  <ScanBarcode className="h-4 w-4" />
+                  Step 1: Scan IMEI {isBulkMode && `(${bulkItems.length} items added)`}
+                </Label>
+                {isBulkMode && (
+                  <Button
+                    variant={showCamera ? "destructive" : "outline"}
+                    size="sm"
+                    onClick={showCamera ? stopCamera : startCamera}
+                    className="gap-1"
+                  >
+                    <Camera className="h-4 w-4" />
+                    {showCamera ? "Stop" : "Scan"}
+                  </Button>
+                )}
+              </div>
               <div className="flex gap-2">
                 <Input
                   value={imeiInput}
@@ -375,9 +558,10 @@ export default function TransfersPage() {
                   placeholder="Enter or scan IMEI..."
                   className="font-mono"
                   onKeyDown={(e) => e.key === "Enter" && (isBulkMode ? handleBulkAdd() : handleSingleValidate())}
+                  disabled={showCamera}
                 />
                 {isBulkMode ? (
-                  <Button onClick={handleBulkAdd} disabled={isValidating}>
+                  <Button onClick={handleBulkAdd} disabled={isValidating || showCamera}>
                     {isValidating ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
@@ -388,13 +572,23 @@ export default function TransfersPage() {
                     )}
                   </Button>
                 ) : (
-                  <Button onClick={handleSingleValidate} disabled={isValidating}>
-                    {isValidating ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      "Verify"
-                    )}
-                  </Button>
+                  <>
+                    <Button 
+                      variant="outline" 
+                      size="icon"
+                      onClick={showCamera ? stopCamera : startCamera}
+                      className={cn(showCamera && "bg-destructive text-destructive-foreground")}
+                    >
+                      <Camera className="h-4 w-4" />
+                    </Button>
+                    <Button onClick={handleSingleValidate} disabled={isValidating}>
+                      {isValidating ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        "Verify"
+                      )}
+                    </Button>
+                  </>
                 )}
               </div>
 
