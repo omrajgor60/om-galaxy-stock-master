@@ -19,6 +19,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import {
   Store,
@@ -27,7 +29,10 @@ import {
   TrendingUp,
   Loader2,
   BarChart3,
+  Calendar,
 } from "lucide-react";
+import { format, subDays, startOfDay, endOfDay } from "date-fns";
+import { DateRange } from "react-day-picker";
 
 interface Outlet {
   id: string;
@@ -70,6 +75,12 @@ export default function OutletReportsPage() {
     totalRevenue: 0,
   });
 
+  // Date range state
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: subDays(new Date(), 30),
+    to: new Date(),
+  });
+
   useEffect(() => {
     fetchOutlets();
   }, []);
@@ -78,7 +89,7 @@ export default function OutletReportsPage() {
     if (outlets.length >= 0) {
       fetchReportData();
     }
-  }, [selectedOutletId, outlets]);
+  }, [selectedOutletId, outlets, dateRange]);
 
   const fetchOutlets = async () => {
     const { data } = await supabase
@@ -141,7 +152,7 @@ export default function OutletReportsPage() {
       });
     }
 
-    // Fetch recent sales with outlet filter
+    // Fetch recent sales with outlet and date filter
     let salesQuery = supabase
       .from("sales")
       .select(`
@@ -153,8 +164,15 @@ export default function OutletReportsPage() {
         customer:customers!customer_id(name),
         stock_log:stock_logs!stock_log_id(outlet_id)
       `)
-      .order("created_at", { ascending: false })
-      .limit(50);
+      .order("created_at", { ascending: false });
+
+    // Apply date range filter
+    if (dateRange?.from) {
+      salesQuery = salesQuery.gte("created_at", startOfDay(dateRange.from).toISOString());
+    }
+    if (dateRange?.to) {
+      salesQuery = salesQuery.lte("created_at", endOfDay(dateRange.to).toISOString());
+    }
 
     const { data: salesData } = await salesQuery;
 
@@ -188,21 +206,86 @@ export default function OutletReportsPage() {
           <p className="text-muted-foreground">View inventory and sales by outlet</p>
         </div>
         
-        <div className="flex items-center gap-2">
-          <Store className="h-4 w-4 text-muted-foreground" />
-          <Select value={selectedOutletId} onValueChange={setSelectedOutletId}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Select outlet" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Outlets</SelectItem>
-              {outlets.map((outlet) => (
-                <SelectItem key={outlet.id} value={outlet.id}>
-                  {outlet.name} ({outlet.code})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Date Range Picker */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "justify-start text-left font-normal",
+                  !dateRange && "text-muted-foreground"
+                )}
+              >
+                <Calendar className="mr-2 h-4 w-4" />
+                {dateRange?.from ? (
+                  dateRange.to ? (
+                    <>
+                      {format(dateRange.from, "MMM d, yyyy")} - {format(dateRange.to, "MMM d, yyyy")}
+                    </>
+                  ) : (
+                    format(dateRange.from, "MMM d, yyyy")
+                  )
+                ) : (
+                  <span>Pick date range</span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <CalendarComponent
+                initialFocus
+                mode="range"
+                defaultMonth={dateRange?.from}
+                selected={dateRange}
+                onSelect={setDateRange}
+                numberOfMonths={2}
+                className="pointer-events-auto"
+              />
+            </PopoverContent>
+          </Popover>
+
+          {/* Quick Date Presets */}
+          <div className="flex gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setDateRange({ from: subDays(new Date(), 7), to: new Date() })}
+            >
+              7D
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setDateRange({ from: subDays(new Date(), 30), to: new Date() })}
+            >
+              30D
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setDateRange({ from: subDays(new Date(), 90), to: new Date() })}
+            >
+              90D
+            </Button>
+          </div>
+
+          {/* Outlet Selector */}
+          <div className="flex items-center gap-2">
+            <Store className="h-4 w-4 text-muted-foreground" />
+            <Select value={selectedOutletId} onValueChange={setSelectedOutletId}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Select outlet" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Outlets</SelectItem>
+                {outlets.map((outlet) => (
+                  <SelectItem key={outlet.id} value={outlet.id}>
+                    {outlet.name} ({outlet.code})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
