@@ -42,6 +42,7 @@ import {
   ChevronRight,
   ArrowRightLeft,
   BarChart3,
+  ArrowDown,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -52,6 +53,7 @@ const adminLinks = [
   { to: "/customers", label: "Customers", icon: Users },
   { to: "/inventory", label: "Inventory", icon: Package },
   { to: "/transfers", label: "Transfers", icon: ArrowRightLeft },
+  { to: "/incoming-stock", label: "Incoming Stock", icon: ArrowDown },
   { to: "/outlet-reports", label: "Reports", icon: BarChart3 },
   { to: "/outlets", label: "Outlets", icon: Store },
   { to: "/staff", label: "Staff", icon: UserCog },
@@ -65,6 +67,7 @@ const staffLinks = [
   { to: "/sales", label: "Record Sale", icon: ShoppingCart },
   { to: "/inventory", label: "Inventory", icon: Package },
   { to: "/transfers", label: "Transfers", icon: ArrowRightLeft },
+  { to: "/incoming-stock", label: "Incoming Stock", icon: ArrowDown },
   { to: "/outlet-reports", label: "Reports", icon: BarChart3 },
   { to: "/requests", label: "My Requests", icon: FileText },
   { to: "/report-issue", label: "Report Issue", icon: MessageSquare },

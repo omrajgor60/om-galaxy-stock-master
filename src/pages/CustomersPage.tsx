@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Users, Phone } from "lucide-react";
+import { toast } from "sonner";
+import { Search, Users, Phone, Download, Loader2 } from "lucide-react";
 
 interface Customer {
   id: string;
@@ -17,9 +20,11 @@ interface Customer {
 }
 
 export default function CustomersPage() {
+  const { isAdmin } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     fetchCustomers();
@@ -35,11 +40,63 @@ export default function CustomersPage() {
     c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search)
   );
 
+  const exportToCSV = () => {
+    if (filtered.length === 0) {
+      toast.error("No customers to export");
+      return;
+    }
+
+    setIsExporting(true);
+    
+    try {
+      const headers = ["Name", "Phone", "Email", "Total Spent", "Purchase Count", "Created At"];
+      const csvData = filtered.map(c => [
+        c.name,
+        c.phone,
+        c.email || "",
+        c.total_spent.toString(),
+        c.purchase_count.toString(),
+        new Date(c.created_at).toLocaleDateString(),
+      ]);
+      
+      const csvContent = [
+        headers.join(","),
+        ...csvData.map(row => row.map(cell => `"${cell}"`).join(","))
+      ].join("\n");
+      
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `customers_${new Date().toISOString().split("T")[0]}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      
+      toast.success(`Exported ${filtered.length} customers`);
+    } catch {
+      toast.error("Failed to export");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Customers</h1>
-        <Badge variant="outline">{customers.length} total</Badge>
+        <div className="flex items-center gap-3">
+          {isAdmin && (
+            <Button variant="outline" size="sm" onClick={exportToCSV} disabled={isExporting}>
+              {isExporting ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4 mr-2" />
+              )}
+              Export CSV
+            </Button>
+          )}
+          <Badge variant="outline">{customers.length} total</Badge>
+        </div>
       </div>
 
       <div className="relative">

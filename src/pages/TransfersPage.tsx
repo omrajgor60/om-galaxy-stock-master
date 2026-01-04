@@ -74,6 +74,7 @@ interface Transfer {
   id: string;
   created_at: string;
   notes: string | null;
+  status: string;
   stock_log: {
     imei: string;
     product: {
@@ -148,6 +149,7 @@ export default function TransfersPage() {
         id,
         created_at,
         notes,
+        status,
         stock_log:stock_logs!stock_log_id(
           imei,
           product:products!product_id(name, color)
@@ -361,7 +363,7 @@ export default function TransfersPage() {
     setIsTransferring(true);
 
     try {
-      // Create transfer record
+      // Create transfer record with 'in_transit' status (stock stays at origin until accepted)
       const { error: transferError } = await supabase
         .from("stock_transfers")
         .insert({
@@ -370,20 +372,15 @@ export default function TransfersPage() {
           to_outlet_id: toOutlet.id,
           transferred_by: user.id,
           notes: notes.trim() || null,
+          status: "in_transit",
         });
 
       if (transferError) throw transferError;
 
-      // Update stock_log with new outlet
-      const { error: updateError } = await supabase
-        .from("stock_logs")
-        .update({ outlet_id: toOutlet.id })
-        .eq("id", stockItem.id);
-
-      if (updateError) throw updateError;
+      // Do NOT update stock_log outlet_id here - it stays at origin until receiving shop accepts
 
       playSound("success");
-      toast.success("Transfer completed successfully!");
+      toast.success("Transfer initiated! Item is now in transit.");
 
       // Reset form
       setStockItem(null);
@@ -415,13 +412,14 @@ export default function TransfersPage() {
     setIsTransferring(true);
 
     try {
-      // Create transfer records for all items
+      // Create transfer records for all items with 'in_transit' status
       const transferRecords = transferableItems.map(item => ({
         stock_log_id: item.id,
         from_outlet_id: item.outlet_id,
         to_outlet_id: toOutlet.id,
         transferred_by: user.id,
         notes: notes.trim() || null,
+        status: "in_transit",
       }));
 
       const { error: transferError } = await supabase
@@ -430,18 +428,10 @@ export default function TransfersPage() {
 
       if (transferError) throw transferError;
 
-      // Update all stock_logs with new outlet
-      for (const item of transferableItems) {
-        const { error: updateError } = await supabase
-          .from("stock_logs")
-          .update({ outlet_id: toOutlet.id })
-          .eq("id", item.id);
-
-        if (updateError) throw updateError;
-      }
+      // Do NOT update stock_logs outlet_id - items stay at origin until receiving shop accepts
 
       playSound("success");
-      toast.success(`Successfully transferred ${transferableItems.length} items!`);
+      toast.success(`${transferableItems.length} items are now in transit!`);
 
       // Reset form
       setBulkItems([]);

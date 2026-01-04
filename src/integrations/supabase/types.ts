@@ -271,6 +271,7 @@ export type Database = {
       }
       sales: {
         Row: {
+          commission: number | null
           created_at: string
           customer_id: string
           discount: number | null
@@ -283,6 +284,7 @@ export type Database = {
           stock_log_id: string
         }
         Insert: {
+          commission?: number | null
           created_at?: string
           customer_id: string
           discount?: number | null
@@ -295,6 +297,7 @@ export type Database = {
           stock_log_id: string
         }
         Update: {
+          commission?: number | null
           created_at?: string
           customer_id?: string
           discount?: number | null
@@ -424,28 +427,37 @@ export type Database = {
       }
       stock_transfers: {
         Row: {
+          accepted_at: string | null
+          accepted_by: string | null
           created_at: string | null
           from_outlet_id: string
           id: string
           notes: string | null
+          status: string
           stock_log_id: string
           to_outlet_id: string
           transferred_by: string
         }
         Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
           created_at?: string | null
           from_outlet_id: string
           id?: string
           notes?: string | null
+          status?: string
           stock_log_id: string
           to_outlet_id: string
           transferred_by: string
         }
         Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
           created_at?: string | null
           from_outlet_id?: string
           id?: string
           notes?: string | null
+          status?: string
           stock_log_id?: string
           to_outlet_id?: string
           transferred_by?: string

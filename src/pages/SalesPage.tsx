@@ -111,6 +111,7 @@ export default function SalesPage() {
   // Sale state
   const [salePrice, setSalePrice] = useState("");
   const [discount, setDiscount] = useState("");
+  const [commission, setCommission] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -289,6 +290,7 @@ export default function SalesPage() {
         sold_by: user.id,
         sale_price: parseFloat(salePrice) || selectedProduct.price,
         discount: parseFloat(discount) || 0,
+        commission: parseFloat(commission) || 0,
         payment_method: paymentMethod,
       });
 
@@ -314,6 +316,7 @@ export default function SalesPage() {
       setStockOutlet(null);
       setSalePrice("");
       setDiscount("");
+      setCommission("");
       setPaymentMethod("cash");
     } catch (error: any) {
       playSound("error");
@@ -605,19 +608,32 @@ export default function SalesPage() {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Payment Method</Label>
-            <Select value={paymentMethod} onValueChange={setPaymentMethod} disabled={!stockItem}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="cash">Cash</SelectItem>
-                <SelectItem value="card">Card</SelectItem>
-                <SelectItem value="upi">UPI</SelectItem>
-                <SelectItem value="credit">Credit</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Commission (₹)</Label>
+              <Input
+                type="number"
+                value={commission}
+                onChange={(e) => setCommission(e.target.value)}
+                placeholder="0"
+                disabled={!stockItem}
+              />
+              <p className="text-xs text-muted-foreground">Finance company earnings</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Payment Method</Label>
+              <Select value={paymentMethod} onValueChange={setPaymentMethod} disabled={!stockItem}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="card">Card</SelectItem>
+                  <SelectItem value="upi">UPI</SelectItem>
+                  <SelectItem value="credit">Credit</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {canProcessSale && (
