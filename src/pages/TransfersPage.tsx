@@ -42,6 +42,7 @@ import {
   Plus,
   Camera,
   XCircle,
+  Ban,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -124,6 +125,7 @@ export default function TransfersPage() {
   
   const [recentTransfers, setRecentTransfers] = useState<Transfer[]>([]);
   const [isLoadingTransfers, setIsLoadingTransfers] = useState(true);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchOutlets();
@@ -449,6 +451,30 @@ export default function TransfersPage() {
 
   const canTransfer = stockItem && toOutlet && stockItem.outlet_id !== toOutlet.id;
   const canBulkTransfer = bulkItems.length > 0 && toOutlet;
+
+  const handleCancelTransfer = async (transferId: string) => {
+    if (!user) return;
+
+    setCancellingId(transferId);
+
+    try {
+      const { error } = await supabase
+        .from("stock_transfers")
+        .update({ status: "cancelled" })
+        .eq("id", transferId);
+
+      if (error) throw error;
+
+      playSound("warning");
+      toast.success("Transfer cancelled. Stock remains at origin.");
+      fetchRecentTransfers();
+    } catch (error: any) {
+      playSound("error");
+      toast.error("Failed to cancel: " + error.message);
+    } finally {
+      setCancellingId(null);
+    }
+  };
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -828,9 +854,24 @@ export default function TransfersPage() {
                             {transfer.stock_log.imei}
                           </p>
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          {formatDistanceToNow(new Date(transfer.created_at), { addSuffix: true })}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          {transfer.status === "in_transit" ? (
+                            <Badge variant="secondary" className="text-xs">
+                              In Transit
+                            </Badge>
+                          ) : transfer.status === "completed" ? (
+                            <Badge variant="default" className="text-xs bg-green-600">
+                              Completed
+                            </Badge>
+                          ) : (
+                            <Badge variant="destructive" className="text-xs">
+                              Cancelled
+                            </Badge>
+                          )}
+                          <p className="text-xs text-muted-foreground">
+                            {formatDistanceToNow(new Date(transfer.created_at), { addSuffix: true })}
+                          </p>
+                        </div>
                       </div>
                       <div className="flex items-center gap-2 text-sm">
                         <Badge variant="outline">{transfer.from_outlet.code}</Badge>
@@ -840,9 +881,29 @@ export default function TransfersPage() {
                       {transfer.notes && (
                         <p className="text-xs text-muted-foreground">{transfer.notes}</p>
                       )}
-                      <p className="text-xs text-muted-foreground">
-                        By: {transfer.transferred_by_profile?.full_name || "Unknown"}
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-muted-foreground">
+                          By: {transfer.transferred_by_profile?.full_name || "Unknown"}
+                        </p>
+                        {transfer.status === "in_transit" && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => handleCancelTransfer(transfer.id)}
+                            disabled={cancellingId === transfer.id}
+                          >
+                            {cancellingId === transfer.id ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <>
+                                <Ban className="h-3 w-3 mr-1" />
+                                Cancel
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
