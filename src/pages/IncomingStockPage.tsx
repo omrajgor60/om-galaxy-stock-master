@@ -33,6 +33,7 @@ import {
   Check,
   Clock,
   Store,
+  XCircle,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -70,7 +71,9 @@ export default function IncomingStockPage() {
   const [incomingTransfers, setIncomingTransfers] = useState<IncomingTransfer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [confirmTransfer, setConfirmTransfer] = useState<IncomingTransfer | null>(null);
+  const [confirmReject, setConfirmReject] = useState<IncomingTransfer | null>(null);
 
   useEffect(() => {
     fetchIncomingTransfers();
@@ -143,6 +146,36 @@ export default function IncomingStockPage() {
     } finally {
       setAcceptingId(null);
       setConfirmTransfer(null);
+    }
+  };
+
+  const handleRejectTransfer = async (transfer: IncomingTransfer) => {
+    if (!user) return;
+
+    setRejectingId(transfer.id);
+
+    try {
+      // Update transfer status to cancelled - stock stays at origin
+      const { error: transferError } = await supabase
+        .from("stock_transfers")
+        .update({
+          status: "cancelled",
+        })
+        .eq("id", transfer.id);
+
+      if (transferError) throw transferError;
+
+      playSound("warning");
+      toast.success("Transfer rejected. Stock returned to sender.");
+      
+      // Remove from list
+      setIncomingTransfers(prev => prev.filter(t => t.id !== transfer.id));
+    } catch (error: any) {
+      playSound("error");
+      toast.error("Failed to reject: " + error.message);
+    } finally {
+      setRejectingId(null);
+      setConfirmReject(null);
     }
   };
 
@@ -233,20 +266,37 @@ export default function IncomingStockPage() {
                         {formatDistanceToNow(new Date(transfer.created_at), { addSuffix: true })}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          onClick={() => setConfirmTransfer(transfer)}
-                          disabled={acceptingId === transfer.id}
-                        >
-                          {acceptingId === transfer.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <>
-                              <Check className="h-4 w-4 mr-1" />
-                              Accept
-                            </>
-                          )}
-                        </Button>
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => setConfirmReject(transfer)}
+                            disabled={rejectingId === transfer.id || acceptingId === transfer.id}
+                          >
+                            {rejectingId === transfer.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <XCircle className="h-4 w-4 mr-1" />
+                                Reject
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => setConfirmTransfer(transfer)}
+                            disabled={acceptingId === transfer.id || rejectingId === transfer.id}
+                          >
+                            {acceptingId === transfer.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <Check className="h-4 w-4 mr-1" />
+                                Accept
+                              </>
+                            )}
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -287,6 +337,42 @@ export default function IncomingStockPage() {
             >
               <Check className="h-4 w-4 mr-2" />
               Accept Stock
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reject Confirmation Dialog */}
+      <AlertDialog open={!!confirmReject} onOpenChange={() => setConfirmReject(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reject Transfer?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  This will reject the transfer and the stock will remain at the sender's outlet.
+                </p>
+                {confirmReject && (
+                  <div className="p-3 rounded-lg bg-muted space-y-2">
+                    <p>
+                      <strong>Product:</strong> {confirmReject.stock_log.product.name}
+                      {confirmReject.stock_log.product.color && ` (${confirmReject.stock_log.product.color})`}
+                    </p>
+                    <p><strong>IMEI:</strong> {confirmReject.stock_log.imei}</p>
+                    <p><strong>From:</strong> {confirmReject.from_outlet.name}</p>
+                  </div>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => confirmReject && handleRejectTransfer(confirmReject)}
+            >
+              <XCircle className="h-4 w-4 mr-2" />
+              Reject Transfer
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
