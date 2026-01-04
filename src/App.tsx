@@ -17,6 +17,7 @@ import RequestsPage from "@/pages/RequestsPage";
 import ExportPage from "@/pages/ExportPage";
 import OutletsPage from "@/pages/OutletsPage";
 import TransfersPage from "@/pages/TransfersPage";
+import IncomingStockPage from "@/pages/IncomingStockPage";
 import OutletReportsPage from "@/pages/OutletReportsPage";
 import NotFound from "@/pages/NotFound";
 
@@ -40,6 +41,7 @@ const App = () => (
               <Route path="/customers" element={<CustomersPage />} />
               <Route path="/inventory" element={<InventoryPage />} />
               <Route path="/transfers" element={<TransfersPage />} />
+              <Route path="/incoming-stock" element={<IncomingStockPage />} />
               <Route path="/outlet-reports" element={<OutletReportsPage />} />
               <Route path="/staff" element={<ProtectedRoute requireAdmin><StaffPage /></ProtectedRoute>} />
               <Route path="/outlets" element={<ProtectedRoute requireAdmin><OutletsPage /></ProtectedRoute>} />
