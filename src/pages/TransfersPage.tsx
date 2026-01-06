@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useMode } from "@/contexts/ModeContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -97,7 +97,7 @@ interface Transfer {
 }
 
 export default function TransfersPage() {
-  const { user } = useAuth();
+  const { isAdmin } = useMode();
   const { playSound } = useSoundEffects();
 
   // Camera refs
@@ -352,7 +352,7 @@ export default function TransfersPage() {
   };
 
   const handleTransfer = async () => {
-    if (!stockItem || !toOutlet || !user) {
+    if (!stockItem || !toOutlet) {
       toast.error("Please complete all required fields");
       return;
     }
@@ -372,7 +372,7 @@ export default function TransfersPage() {
           stock_log_id: stockItem.id,
           from_outlet_id: stockItem.outlet_id,
           to_outlet_id: toOutlet.id,
-          transferred_by: user.id,
+          transferred_by: null,
           notes: notes.trim() || null,
           status: "in_transit",
         });
@@ -398,7 +398,7 @@ export default function TransfersPage() {
   };
 
   const handleBulkTransfer = async () => {
-    if (bulkItems.length === 0 || !toOutlet || !user) {
+    if (bulkItems.length === 0 || !toOutlet) {
       toast.error("Please add items and select destination");
       return;
     }
@@ -419,7 +419,7 @@ export default function TransfersPage() {
         stock_log_id: item.id,
         from_outlet_id: item.outlet_id,
         to_outlet_id: toOutlet.id,
-        transferred_by: user.id,
+        transferred_by: null,
         notes: notes.trim() || null,
         status: "in_transit",
       }));
@@ -453,8 +453,6 @@ export default function TransfersPage() {
   const canBulkTransfer = bulkItems.length > 0 && toOutlet;
 
   const handleCancelTransfer = async (transferId: string) => {
-    if (!user) return;
-
     setCancellingId(transferId);
 
     try {

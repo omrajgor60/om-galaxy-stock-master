@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useMode } from "@/contexts/ModeContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,7 @@ interface Product {
 }
 
 export default function InventoryPage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin } = useMode();
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState("");
   const [showAddDialog, setShowAddDialog] = useState(false);
