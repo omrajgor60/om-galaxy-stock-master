@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useMode } from "@/contexts/ModeContext";
 import { useSoundEffects } from "@/hooks/useSoundEffects";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,7 +66,7 @@ interface ScannedItem {
 }
 
 export default function ScannerPage() {
-  const { user } = useAuth();
+  const { isAdmin } = useMode();
   const { playSound } = useSoundEffects();
   const inputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -221,14 +221,14 @@ export default function ScannerPage() {
   }, [scanInput, selectedProduct, playSound, sessionScans]);
 
   const confirmScan = async () => {
-    if (!pendingScan || !selectedProduct || !selectedOutlet || !user || isPendingDuplicate) return;
+    if (!pendingScan || !selectedProduct || !selectedOutlet || isPendingDuplicate) return;
 
     const { data, error } = await supabase
       .from("stock_logs")
       .insert({
         product_id: selectedProduct.id,
         imei: pendingScan,
-        scanned_by: user.id,
+        scanned_by: null,
         outlet_id: selectedOutlet.id,
         status: "in_stock",
       })

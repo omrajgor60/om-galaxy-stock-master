@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useMode } from "@/contexts/ModeContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import { Calendar, MessageSquare, Plus } from "lucide-react";
 import { format } from "date-fns";
 
 export default function RequestsPage() {
-  const { user, isAdmin } = useAuth();
+  const { isAdmin } = useMode();
   const [timeOffRequests, setTimeOffRequests] = useState<any[]>([]);
   const [issueReports, setIssueReports] = useState<any[]>([]);
   const [showTimeOffDialog, setShowTimeOffDialog] = useState(false);
@@ -33,15 +33,13 @@ export default function RequestsPage() {
   };
 
   const submitTimeOff = async () => {
-    if (!user) return;
-    const { error } = await supabase.from("time_off_requests").insert({ ...newTimeOff, user_id: user.id });
+    const { error } = await supabase.from("time_off_requests").insert({ ...newTimeOff, user_id: null });
     if (error) toast.error(error.message);
     else { toast.success("Request submitted!"); setShowTimeOffDialog(false); fetchData(); setNewTimeOff({ start_date: "", end_date: "", reason: "" }); }
   };
 
   const submitIssue = async () => {
-    if (!user) return;
-    const { error } = await supabase.from("issue_reports").insert({ ...newIssue, user_id: user.id });
+    const { error } = await supabase.from("issue_reports").insert({ ...newIssue, user_id: null });
     if (error) toast.error(error.message);
     else { toast.success("Issue reported!"); setShowIssueDialog(false); fetchData(); setNewIssue({ category: "general", title: "", description: "" }); }
   };

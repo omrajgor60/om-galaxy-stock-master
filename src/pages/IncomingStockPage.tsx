@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useMode } from "@/contexts/ModeContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -65,7 +65,7 @@ interface IncomingTransfer {
 }
 
 export default function IncomingStockPage() {
-  const { user } = useAuth();
+  const { isAdmin } = useMode();
   const { playSound } = useSoundEffects();
 
   const [incomingTransfers, setIncomingTransfers] = useState<IncomingTransfer[]>([]);
@@ -110,8 +110,6 @@ export default function IncomingStockPage() {
   };
 
   const handleAcceptTransfer = async (transfer: IncomingTransfer) => {
-    if (!user) return;
-
     setAcceptingId(transfer.id);
 
     try {
@@ -120,7 +118,7 @@ export default function IncomingStockPage() {
         .from("stock_transfers")
         .update({
           status: "completed",
-          accepted_by: user.id,
+          accepted_by: null,
           accepted_at: new Date().toISOString(),
         })
         .eq("id", transfer.id);
@@ -150,8 +148,6 @@ export default function IncomingStockPage() {
   };
 
   const handleRejectTransfer = async (transfer: IncomingTransfer) => {
-    if (!user) return;
-
     setRejectingId(transfer.id);
 
     try {

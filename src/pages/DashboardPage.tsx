@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useMode } from "@/contexts/ModeContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -64,7 +64,7 @@ interface LeaderboardEntry {
 const CHART_COLORS = ["hsl(24, 95%, 53%)", "hsl(0, 72%, 51%)", "hsl(142, 76%, 36%)", "hsl(48, 96%, 53%)"];
 
 export default function DashboardPage() {
-  const { isAdmin, user } = useAuth();
+  const { isAdmin } = useMode();
   const [stats, setStats] = useState<DashboardStats>({
     totalProducts: 0,
     scansToday: 0,
@@ -82,7 +82,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchDashboardData();
-  }, [isAdmin, user, timeFilter]);
+  }, [isAdmin, timeFilter]);
 
   const fetchDashboardData = async () => {
     setIsLoading(true);

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useMode } from "@/contexts/ModeContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -81,7 +81,7 @@ interface Outlet {
 }
 
 export default function SalesPage() {
-  const { user } = useAuth();
+  const { isAdmin } = useMode();
   const { playSound } = useSoundEffects();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -167,7 +167,7 @@ export default function SalesPage() {
 
   // Create new customer
   const createCustomer = async () => {
-    if (!newCustomerName.trim() || !user) return;
+    if (!newCustomerName.trim()) return;
 
     const { data, error } = await supabase
       .from("customers")
@@ -175,7 +175,7 @@ export default function SalesPage() {
         name: newCustomerName.trim(),
         phone: phoneSearch.trim(),
         email: newCustomerEmail.trim() || null,
-        created_by: user.id,
+        created_by: null,
       })
       .select()
       .single();
@@ -274,7 +274,7 @@ export default function SalesPage() {
 
   // Process sale
   const processSale = async () => {
-    if (!customer || !selectedProduct || !stockItem || !user) {
+    if (!customer || !selectedProduct || !stockItem) {
       toast.error("Please complete all required fields");
       return;
     }
@@ -287,7 +287,7 @@ export default function SalesPage() {
         stock_log_id: stockItem.id,
         customer_id: customer.id,
         product_id: selectedProduct.id,
-        sold_by: user.id,
+        sold_by: null,
         sale_price: parseFloat(salePrice) || selectedProduct.price,
         discount: parseFloat(discount) || 0,
         commission: parseFloat(commission) || 0,
