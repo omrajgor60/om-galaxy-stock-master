@@ -1,18 +1,10 @@
 import { Outlet, NavLink, useLocation } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
+import { useMode } from "@/contexts/ModeContext";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { useNotifications } from "@/hooks/useNotifications";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Popover,
   PopoverContent,
@@ -33,16 +25,15 @@ import {
   Bell,
   Wifi,
   WifiOff,
-  User,
-  LogOut,
   Menu,
-  Clock,
   AlertTriangle,
   MessageSquare,
   ChevronRight,
   ArrowRightLeft,
   BarChart3,
   ArrowDown,
+  Shield,
+  User,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -114,6 +105,33 @@ function SyncIndicator() {
         </div>
       </PopoverContent>
     </Popover>
+  );
+}
+
+function ModeToggle() {
+  const { mode, setMode } = useMode();
+
+  return (
+    <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+      <Button
+        variant={mode === "admin" ? "default" : "ghost"}
+        size="sm"
+        className="h-7 px-3 gap-1.5"
+        onClick={() => setMode("admin")}
+      >
+        <Shield className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">Admin</span>
+      </Button>
+      <Button
+        variant={mode === "staff" ? "default" : "ghost"}
+        size="sm"
+        className="h-7 px-3 gap-1.5"
+        onClick={() => setMode("staff")}
+      >
+        <User className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">Staff</span>
+      </Button>
+    </div>
   );
 }
 
@@ -226,7 +244,7 @@ function NavLinks({ links, isMobile = false }: { links: typeof adminLinks; isMob
 }
 
 export default function AppLayout() {
-  const { profile, role, signOut, isAdmin } = useAuth();
+  const { mode, isAdmin } = useMode();
   const links = isAdmin ? adminLinks : staffLinks;
 
   return (
@@ -251,16 +269,16 @@ export default function AppLayout() {
           <NavLinks links={links} />
         </ScrollArea>
 
-        {/* User Info */}
+        {/* Mode Info */}
         <div className="p-4 border-t border-sidebar-border">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
-              <User className="h-5 w-5 text-primary" />
+              {isAdmin ? <Shield className="h-5 w-5 text-primary" /> : <User className="h-5 w-5 text-primary" />}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-medium text-sm truncate">{profile?.full_name || "User"}</p>
+              <p className="font-medium text-sm truncate">{isAdmin ? "Administrator" : "Staff Member"}</p>
               <Badge variant="outline" className="text-xs">
-                {role === "admin" ? "Admin" : "Staff"}
+                {mode === "admin" ? "Admin" : "Staff"}
               </Badge>
             </div>
           </div>
@@ -302,30 +320,8 @@ export default function AppLayout() {
             {/* Right side actions */}
             <div className="flex items-center gap-2">
               <SyncIndicator />
+              <ModeToggle />
               <NotificationBell />
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon">
-                    <User className="h-5 w-5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel>
-                    <div>
-                      <p>{profile?.full_name || "User"}</p>
-                      <p className="text-xs text-muted-foreground font-normal">
-                        {role === "admin" ? "Administrator" : "Staff Member"}
-                      </p>
-                    </div>
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={signOut} className="text-destructive">
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Sign Out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
             </div>
           </div>
         </header>
