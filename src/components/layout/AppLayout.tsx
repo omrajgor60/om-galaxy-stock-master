@@ -37,6 +37,8 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
+import { Settings } from "lucide-react";
+
 const adminLinks = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/scanner", label: "Scanner", icon: ScanBarcode },
@@ -50,6 +52,7 @@ const adminLinks = [
   { to: "/staff", label: "Staff", icon: UserCog },
   { to: "/requests", label: "Requests", icon: FileText },
   { to: "/export", label: "Export", icon: Download },
+  { to: "/settings", label: "Settings", icon: Settings },
 ];
 
 const staffLinks = [

@@ -18,6 +18,7 @@ import OutletsPage from "@/pages/OutletsPage";
 import TransfersPage from "@/pages/TransfersPage";
 import IncomingStockPage from "@/pages/IncomingStockPage";
 import OutletReportsPage from "@/pages/OutletReportsPage";
+import SettingsPage from "@/pages/SettingsPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -50,6 +51,7 @@ const App = () => (
                 <Route path="/staff" element={<StaffPage />} />
                 <Route path="/outlets" element={<OutletsPage />} />
                 <Route path="/export" element={<ExportPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
               </Route>
             </Route>
             
