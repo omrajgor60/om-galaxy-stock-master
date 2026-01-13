@@ -4,15 +4,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Package,
   ScanBarcode,
   ShoppingCart,
-  Users,
   TrendingUp,
   AlertTriangle,
   DollarSign,
-  BarChart3,
+  Trophy,
+  Users,
+  ArrowUp,
+  ArrowDown,
+  Loader2,
 } from "lucide-react";
 import {
   BarChart,
@@ -22,11 +26,6 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
 } from "recharts";
 
 interface DashboardStats {
@@ -61,8 +60,6 @@ interface LeaderboardEntry {
   total_revenue: number;
 }
 
-const CHART_COLORS = ["hsl(24, 95%, 53%)", "hsl(0, 72%, 51%)", "hsl(142, 76%, 36%)", "hsl(48, 96%, 53%)"];
-
 export default function DashboardPage() {
   const { isAdmin } = useMode();
   const [stats, setStats] = useState<DashboardStats>({
@@ -87,30 +84,25 @@ export default function DashboardPage() {
   const fetchDashboardData = async () => {
     setIsLoading(true);
 
-    // Fetch products count
     const { count: productsCount } = await supabase
       .from("products")
       .select("*", { count: "exact", head: true });
 
-    // Fetch today's scans
     const today = new Date().toISOString().split("T")[0];
     const { count: scansCount } = await supabase
       .from("stock_logs")
       .select("*", { count: "exact", head: true })
       .gte("scanned_at", today);
 
-    // Fetch today's sales
     const { count: salesCount } = await supabase
       .from("sales")
       .select("*", { count: "exact", head: true })
       .gte("created_at", today);
 
-    // Fetch customers count
     const { count: customersCount } = await supabase
       .from("customers")
       .select("*", { count: "exact", head: true });
 
-    // Fetch stock value and low stock products
     const { data: products } = await supabase.from("products").select("*");
     
     let totalValue = 0;
@@ -144,7 +136,6 @@ export default function DashboardPage() {
       }
     }
 
-    // Sort low stock by severity
     lowStock.sort((a, b) => {
       const order = { out_of_stock: 0, critical: 1, low: 2 };
       return order[a.level] - order[b.level];
@@ -152,7 +143,6 @@ export default function DashboardPage() {
 
     setLowStockProducts(lowStock);
 
-    // Fetch sales data for chart
     const startDate = new Date();
     if (timeFilter === "today") {
       startDate.setHours(0, 0, 0, 0);
@@ -167,11 +157,13 @@ export default function DashboardPage() {
       .select("sale_price, created_at")
       .gte("created_at", startDate.toISOString());
 
-    // Group sales by date
     const salesByDate: Record<string, { sales: number; revenue: number }> = {};
     if (salesDataRaw) {
       salesDataRaw.forEach((sale) => {
-        const date = new Date(sale.created_at).toLocaleDateString();
+        const date = new Date(sale.created_at).toLocaleDateString("en-US", { 
+          month: "short", 
+          day: "numeric" 
+        });
         if (!salesByDate[date]) {
           salesByDate[date] = { sales: 0, revenue: 0 };
         }
@@ -187,7 +179,6 @@ export default function DashboardPage() {
       }))
     );
 
-    // Fetch leaderboard (weekly sales)
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
 
@@ -233,206 +224,320 @@ export default function DashboardPage() {
     setIsLoading(false);
   };
 
-  const StatCard = ({
-    title,
-    value,
-    icon: Icon,
-    trend,
-    color = "primary",
-  }: {
-    title: string;
-    value: string | number;
-    icon: any;
-    trend?: string;
-    color?: string;
-  }) => (
-    <Card className="overflow-hidden">
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-muted-foreground">{title}</p>
-            <p className="text-2xl font-bold mt-1">{value}</p>
-            {trend && (
-              <p className="text-xs text-success flex items-center gap-1 mt-1">
-                <TrendingUp className="h-3 w-3" />
-                {trend}
-              </p>
-            )}
-          </div>
-          <div className={`p-3 rounded-lg ${color === "primary" ? "gradient-primary" : `bg-${color}`}`}>
-            <Icon className="h-6 w-6 text-primary-foreground" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-
   const getLevelBadge = (level: LowStockProduct["level"]) => {
     switch (level) {
       case "out_of_stock":
-        return <Badge className="bg-stock-out">Out of Stock</Badge>;
+        return <Badge className="bg-destructive/20 text-destructive border-destructive/30">Out of Stock</Badge>;
       case "critical":
         return <Badge variant="destructive">Critical</Badge>;
       case "low":
-        return <Badge className="bg-warning text-warning-foreground">Low</Badge>;
+        return <Badge className="bg-warning/20 text-warning border-warning/30">Low</Badge>;
     }
   };
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{isAdmin ? "Dashboard" : "My Dashboard"}</h1>
-          <p className="text-muted-foreground">Welcome back! Here's your overview.</p>
+  if (isLoading) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading dashboard...</p>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant={timeFilter === "today" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setTimeFilter("today")}
-          >
-            Today
-          </Button>
-          <Button
-            variant={timeFilter === "week" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setTimeFilter("week")}
-          >
-            Week
-          </Button>
-          <Button
-            variant={timeFilter === "month" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setTimeFilter("month")}
-          >
-            Month
-          </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full flex flex-col gap-6">
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl lg:text-3xl font-bold">
+            {isAdmin ? "Dashboard" : "My Dashboard"}
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Welcome back! Here's your overview.
+          </p>
+        </div>
+        <div className="flex items-center bg-muted/30 rounded-xl p-1 border border-border/50">
+          {(["today", "week", "month"] as const).map((filter) => (
+            <Button
+              key={filter}
+              variant="ghost"
+              size="sm"
+              onClick={() => setTimeFilter(filter)}
+              className={`h-9 px-4 rounded-lg capitalize transition-all ${
+                timeFilter === filter
+                  ? "gradient-primary text-primary-foreground shadow-lg"
+                  : "hover:bg-muted/50"
+              }`}
+            >
+              {filter}
+            </Button>
+          ))}
         </div>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Products" value={stats.totalProducts} icon={Package} />
-        <StatCard title="Scans Today" value={stats.scansToday} icon={ScanBarcode} />
-        <StatCard title="Sales Today" value={stats.salesToday} icon={ShoppingCart} />
-        {isAdmin && (
-          <StatCard
-            title="Stock Value"
-            value={`₹${stats.totalStockValue.toLocaleString()}`}
-            icon={DollarSign}
-          />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="bg-card/80 backdrop-blur border-border/50 overflow-hidden group hover:border-primary/30 transition-all">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground font-medium">Total Products</p>
+                <p className="text-3xl font-bold mt-2">{stats.totalProducts}</p>
+                <div className="flex items-center gap-1 mt-2 text-success text-sm">
+                  <ArrowUp className="h-3 w-3" />
+                  <span>Active</span>
+                </div>
+              </div>
+              <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Package className="h-7 w-7 text-primary" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card/80 backdrop-blur border-border/50 overflow-hidden group hover:border-primary/30 transition-all">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground font-medium">Scans Today</p>
+                <p className="text-3xl font-bold mt-2">{stats.scansToday}</p>
+                <div className="flex items-center gap-1 mt-2 text-muted-foreground text-sm">
+                  <ScanBarcode className="h-3 w-3" />
+                  <span>Items logged</span>
+                </div>
+              </div>
+              <div className="h-14 w-14 rounded-2xl bg-secondary/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <ScanBarcode className="h-7 w-7 text-secondary" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card/80 backdrop-blur border-border/50 overflow-hidden group hover:border-primary/30 transition-all">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground font-medium">Sales Today</p>
+                <p className="text-3xl font-bold mt-2">{stats.salesToday}</p>
+                <div className="flex items-center gap-1 mt-2 text-success text-sm">
+                  <TrendingUp className="h-3 w-3" />
+                  <span>Revenue</span>
+                </div>
+              </div>
+              <div className="h-14 w-14 rounded-2xl bg-success/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <ShoppingCart className="h-7 w-7 text-success" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {isAdmin ? (
+          <Card className="bg-card/80 backdrop-blur border-border/50 overflow-hidden group hover:border-primary/30 transition-all">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground font-medium">Stock Value</p>
+                  <p className="text-3xl font-bold mt-2">₹{(stats.totalStockValue / 1000).toFixed(0)}K</p>
+                  <div className="flex items-center gap-1 mt-2 text-muted-foreground text-sm">
+                    <DollarSign className="h-3 w-3" />
+                    <span>Total worth</span>
+                  </div>
+                </div>
+                <div className="h-14 w-14 rounded-2xl bg-warning/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <DollarSign className="h-7 w-7 text-warning" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="bg-card/80 backdrop-blur border-border/50 overflow-hidden group hover:border-primary/30 transition-all">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground font-medium">Customers</p>
+                  <p className="text-3xl font-bold mt-2">{stats.totalCustomers}</p>
+                  <div className="flex items-center gap-1 mt-2 text-muted-foreground text-sm">
+                    <Users className="h-3 w-3" />
+                    <span>Registered</span>
+                  </div>
+                </div>
+                <div className="h-14 w-14 rounded-2xl bg-info/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Users className="h-7 w-7 text-info" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         )}
-        {!isAdmin && <StatCard title="Customers" value={stats.totalCustomers} icon={Users} />}
       </div>
 
-      {/* Low Stock Alert Widget (Admin Only) */}
+      {/* Low Stock Alert */}
       {isAdmin && lowStockProducts.length > 0 && (
-        <Card className="border-warning/50">
+        <Card className="bg-card/80 backdrop-blur border-warning/30 overflow-hidden">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-warning" />
-                <CardTitle className="text-lg">Stock Alerts</CardTitle>
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-warning/10 flex items-center justify-center">
+                  <AlertTriangle className="h-5 w-5 text-warning" />
+                </div>
+                <div>
+                  <CardTitle>Stock Alerts</CardTitle>
+                  <CardDescription>Products needing attention</CardDescription>
+                </div>
               </div>
               <div className="flex gap-2">
-                <Badge variant="destructive">{stats.criticalStockCount} Critical</Badge>
-                <Badge className="bg-warning text-warning-foreground">{stats.lowStockCount} Low</Badge>
+                <Badge variant="destructive" className="h-7">
+                  {stats.criticalStockCount} Critical
+                </Badge>
+                <Badge className="bg-warning/20 text-warning border-warning/30 h-7">
+                  {stats.lowStockCount} Low
+                </Badge>
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {lowStockProducts.slice(0, 5).map((product) => (
-                <div
-                  key={product.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
-                >
-                  <div>
-                    <p className="font-medium">
-                      {product.name} {product.color && `(${product.color})`}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {product.stock_count} remaining (threshold: {product.threshold})
-                    </p>
+            <ScrollArea className="h-40">
+              <div className="space-y-2">
+                {lowStockProducts.slice(0, 5).map((product) => (
+                  <div
+                    key={product.id}
+                    className="flex items-center justify-between p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`h-2 w-2 rounded-full ${
+                        product.level === "out_of_stock" 
+                          ? "bg-destructive" 
+                          : product.level === "critical" 
+                            ? "bg-destructive animate-pulse" 
+                            : "bg-warning"
+                      }`} />
+                      <div>
+                        <p className="font-medium text-sm">
+                          {product.name} {product.color && `(${product.color})`}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {product.stock_count} left / {product.threshold} threshold
+                        </p>
+                      </div>
+                    </div>
+                    {getLevelBadge(product.level)}
                   </div>
-                  {getLevelBadge(product.level)}
-                </div>
-              ))}
-              {lowStockProducts.length > 5 && (
-                <Button variant="ghost" className="w-full text-muted-foreground">
-                  View all ({lowStockProducts.length} items)
-                </Button>
-              )}
-            </div>
+                ))}
+              </div>
+            </ScrollArea>
           </CardContent>
         </Card>
       )}
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1 min-h-0">
         {/* Sales Chart */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Sales Overview</CardTitle>
-            <CardDescription>Revenue and sales count over time</CardDescription>
+        <Card className="bg-card/80 backdrop-blur border-border/50 flex flex-col">
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl gradient-primary flex items-center justify-center">
+                <TrendingUp className="h-5 w-5 text-primary-foreground" />
+              </div>
+              <div>
+                <CardTitle>Sales Overview</CardTitle>
+                <CardDescription>Revenue over time</CardDescription>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="h-64">
+          <CardContent className="flex-1 min-h-0 pb-4">
+            {salesData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-muted-foreground">
+                <p>No sales data for this period</p>
+              </div>
+            ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={salesData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                <BarChart data={salesData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
+                  <XAxis 
+                    dataKey="date" 
+                    stroke="hsl(var(--muted-foreground))" 
+                    fontSize={12}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis 
+                    stroke="hsl(var(--muted-foreground))" 
+                    fontSize={12}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(value) => `₹${value / 1000}K`}
+                  />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "hsl(var(--card))",
                       border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
+                      borderRadius: "12px",
+                      boxShadow: "0 10px 40px -10px rgba(0,0,0,0.5)",
                     }}
+                    formatter={(value: number) => [`₹${value.toLocaleString()}`, "Revenue"]}
                   />
-                  <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                  <Bar 
+                    dataKey="revenue" 
+                    fill="hsl(var(--primary))" 
+                    radius={[6, 6, 0, 0]}
+                    maxBarSize={50}
+                  />
                 </BarChart>
               </ResponsiveContainer>
-            </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Weekly Sales Leaderboard */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Weekly Sales Rankings</CardTitle>
-            <CardDescription>Top performers this week</CardDescription>
+        {/* Leaderboard */}
+        <Card className="bg-card/80 backdrop-blur border-border/50 flex flex-col">
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-warning/10 flex items-center justify-center">
+                <Trophy className="h-5 w-5 text-warning" />
+              </div>
+              <div>
+                <CardTitle>Weekly Rankings</CardTitle>
+                <CardDescription>Top performers this week</CardDescription>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent>
-            {leaderboard.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">No sales this week</p>
-            ) : (
-              <div className="space-y-3">
-                {leaderboard.slice(0, 5).map((entry, index) => (
-                  <div
-                    key={entry.user_id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
-                  >
-                    <div className="flex items-center gap-3">
+          <CardContent className="flex-1 min-h-0">
+            <ScrollArea className="h-full">
+              {leaderboard.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-muted-foreground">
+                  <p>No sales this week</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {leaderboard.slice(0, 5).map((entry, index) => (
+                    <div
+                      key={entry.user_id}
+                      className="flex items-center gap-4 p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors"
+                    >
                       <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                        className={`h-10 w-10 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${
                           index === 0
-                            ? "gradient-primary text-primary-foreground"
-                            : "bg-muted-foreground/20"
+                            ? "gradient-primary text-primary-foreground shadow-lg"
+                            : index === 1
+                              ? "bg-muted-foreground/20 text-foreground"
+                              : index === 2
+                                ? "bg-orange-600/20 text-orange-400"
+                                : "bg-muted text-muted-foreground"
                         }`}
                       >
-                        {index + 1}
+                        #{index + 1}
                       </div>
-                      <div>
-                        <p className="font-medium">{entry.full_name}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{entry.full_name}</p>
                         <p className="text-sm text-muted-foreground">{entry.total_sales} sales</p>
                       </div>
+                      <p className="font-bold text-primary">₹{entry.total_revenue.toLocaleString()}</p>
                     </div>
-                    <p className="font-bold text-primary">₹{entry.total_revenue.toLocaleString()}</p>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
           </CardContent>
         </Card>
       </div>
