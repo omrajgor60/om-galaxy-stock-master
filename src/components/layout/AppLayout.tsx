@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Outlet, NavLink, useLocation } from "react-router-dom";
 import { useMode } from "@/contexts/ModeContext";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
@@ -11,6 +12,12 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import {
   Store,
@@ -28,16 +35,17 @@ import {
   Menu,
   AlertTriangle,
   MessageSquare,
-  ChevronRight,
   ArrowRightLeft,
   BarChart3,
   ArrowDown,
   Shield,
   User,
+  Settings,
+  ChevronLeft,
+  ChevronRight,
+  Sparkles,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-
-import { Settings } from "lucide-react";
 
 const adminLinks = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -46,7 +54,7 @@ const adminLinks = [
   { to: "/customers", label: "Customers", icon: Users },
   { to: "/inventory", label: "Inventory", icon: Package },
   { to: "/transfers", label: "Transfers", icon: ArrowRightLeft },
-  { to: "/incoming-stock", label: "Incoming Stock", icon: ArrowDown },
+  { to: "/incoming-stock", label: "Incoming", icon: ArrowDown },
   { to: "/outlet-reports", label: "Reports", icon: BarChart3 },
   { to: "/outlets", label: "Outlets", icon: Store },
   { to: "/staff", label: "Staff", icon: UserCog },
@@ -56,15 +64,15 @@ const adminLinks = [
 ];
 
 const staffLinks = [
-  { to: "/dashboard", label: "My Dashboard", icon: LayoutDashboard },
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/scanner", label: "Scanner", icon: ScanBarcode },
-  { to: "/sales", label: "Record Sale", icon: ShoppingCart },
+  { to: "/sales", label: "Sales", icon: ShoppingCart },
   { to: "/inventory", label: "Inventory", icon: Package },
   { to: "/transfers", label: "Transfers", icon: ArrowRightLeft },
-  { to: "/incoming-stock", label: "Incoming Stock", icon: ArrowDown },
+  { to: "/incoming-stock", label: "Incoming", icon: ArrowDown },
   { to: "/outlet-reports", label: "Reports", icon: BarChart3 },
-  { to: "/requests", label: "My Requests", icon: FileText },
-  { to: "/report-issue", label: "Report Issue", icon: MessageSquare },
+  { to: "/requests", label: "Requests", icon: FileText },
+  { to: "/report-issue", label: "Report", icon: MessageSquare },
 ];
 
 function SyncIndicator() {
@@ -73,35 +81,43 @@ function SyncIndicator() {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-2">
-          {isOnline ? (
-            <Wifi className="h-4 w-4 text-online" />
-          ) : (
-            <WifiOff className="h-4 w-4 text-offline animate-pulse" />
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className={cn(
+            "h-10 px-3 gap-2 rounded-xl transition-all",
+            isOnline 
+              ? "bg-success/10 hover:bg-success/20 text-success" 
+              : "bg-destructive/10 hover:bg-destructive/20 text-destructive"
           )}
-          <span className="hidden sm:inline text-xs">
-            {isOnline ? "Connected" : `Offline (${pendingChanges} pending)`}
+        >
+          {isOnline ? (
+            <Wifi className="h-4 w-4" />
+          ) : (
+            <WifiOff className="h-4 w-4 animate-pulse" />
+          )}
+          <span className="hidden md:inline text-sm font-medium">
+            {isOnline ? "Online" : `Offline`}
           </span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-72" align="end">
+      <PopoverContent className="w-72 bg-card/95 backdrop-blur-xl border-border/50" align="end">
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             {isOnline ? (
-              <div className="h-2 w-2 rounded-full bg-online glow-success" />
+              <div className="h-2.5 w-2.5 rounded-full bg-success animate-pulse" />
             ) : (
-              <div className="h-2 w-2 rounded-full bg-offline animate-pulse" />
+              <div className="h-2.5 w-2.5 rounded-full bg-destructive animate-pulse" />
             )}
-            <span className="font-medium">{isOnline ? "Online" : "Offline"}</span>
+            <span className="font-semibold">{isOnline ? "Connected" : "Offline Mode"}</span>
           </div>
-          <div className="text-sm text-muted-foreground">
+          <div className="text-sm text-muted-foreground space-y-1">
             <p>
-              Last synced:{" "}
-              {lastSyncTime ? formatDistanceToNow(lastSyncTime, { addSuffix: true }) : "Never"}
+              Last sync: {lastSyncTime ? formatDistanceToNow(lastSyncTime, { addSuffix: true }) : "Never"}
             </p>
             {pendingChanges > 0 && (
-              <p className="text-warning mt-1">
-                {pendingChanges} change{pendingChanges > 1 ? "s" : ""} pending sync
+              <p className="text-warning font-medium">
+                {pendingChanges} change{pendingChanges > 1 ? "s" : ""} pending
               </p>
             )}
           </div>
@@ -115,24 +131,34 @@ function ModeToggle() {
   const { mode, setMode } = useMode();
 
   return (
-    <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+    <div className="flex items-center bg-muted/50 rounded-xl p-1 border border-border/50">
       <Button
-        variant={mode === "admin" ? "default" : "ghost"}
+        variant="ghost"
         size="sm"
-        className="h-7 px-3 gap-1.5"
+        className={cn(
+          "h-9 px-4 gap-2 rounded-lg transition-all",
+          mode === "admin" 
+            ? "gradient-primary text-primary-foreground shadow-lg" 
+            : "hover:bg-muted"
+        )}
         onClick={() => setMode("admin")}
       >
-        <Shield className="h-3.5 w-3.5" />
-        <span className="hidden sm:inline">Admin</span>
+        <Shield className="h-4 w-4" />
+        <span className="hidden sm:inline font-medium">Admin</span>
       </Button>
       <Button
-        variant={mode === "staff" ? "default" : "ghost"}
+        variant="ghost"
         size="sm"
-        className="h-7 px-3 gap-1.5"
+        className={cn(
+          "h-9 px-4 gap-2 rounded-lg transition-all",
+          mode === "staff" 
+            ? "gradient-primary text-primary-foreground shadow-lg" 
+            : "hover:bg-muted"
+        )}
         onClick={() => setMode("staff")}
       >
-        <User className="h-3.5 w-3.5" />
-        <span className="hidden sm:inline">Staff</span>
+        <User className="h-4 w-4" />
+        <span className="hidden sm:inline font-medium">Staff</span>
       </Button>
     </div>
   );
@@ -144,65 +170,68 @@ function NotificationBell() {
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case "stock_alert":
-        return <AlertTriangle className="h-4 w-4 text-warning" />;
       case "warning":
         return <AlertTriangle className="h-4 w-4 text-warning" />;
       case "error":
         return <AlertTriangle className="h-4 w-4 text-destructive" />;
       default:
-        return <Bell className="h-4 w-4 text-info" />;
+        return <Sparkles className="h-4 w-4 text-primary" />;
     }
   };
 
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative">
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="relative h-10 w-10 rounded-xl hover:bg-muted/50"
+        >
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <Badge
-              variant="destructive"
-              className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
-            >
+            <span className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center rounded-full gradient-primary text-[10px] font-bold text-primary-foreground shadow-lg">
               {unreadCount > 9 ? "9+" : unreadCount}
-            </Badge>
+            </span>
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80" align="end">
-        <div className="flex items-center justify-between mb-3">
+      <PopoverContent className="w-80 bg-card/95 backdrop-blur-xl border-border/50 p-0" align="end">
+        <div className="flex items-center justify-between p-4 border-b border-border/50">
           <h4 className="font-semibold">Notifications</h4>
           {unreadCount > 0 && (
-            <Button variant="ghost" size="sm" onClick={markAllAsRead}>
+            <Button variant="ghost" size="sm" onClick={markAllAsRead} className="text-xs h-7">
               Mark all read
             </Button>
           )}
         </div>
         <ScrollArea className="h-80">
           {notifications.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">No notifications</p>
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <Bell className="h-10 w-10 mb-3 opacity-30" />
+              <p className="text-sm">No notifications</p>
+            </div>
           ) : (
-            <div className="space-y-2">
+            <div className="p-2 space-y-1">
               {notifications.slice(0, 10).map((notification) => (
                 <div
                   key={notification.id}
                   className={cn(
-                    "p-3 rounded-lg cursor-pointer transition-colors",
-                    notification.is_read ? "bg-muted/30" : "bg-muted"
+                    "p-3 rounded-xl cursor-pointer transition-all hover:bg-muted/50",
+                    notification.is_read ? "opacity-60" : "bg-muted/30"
                   )}
                   onClick={() => markAsRead(notification.id)}
                 >
                   <div className="flex items-start gap-3">
-                    {getNotificationIcon(notification.type)}
+                    <div className="mt-0.5">
+                      {getNotificationIcon(notification.type)}
+                    </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{notification.title}</p>
-                      <p className="text-xs text-muted-foreground truncate">
+                      <p className="font-medium text-sm">{notification.title}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
                         {notification.message}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {formatDistanceToNow(new Date(notification.created_at), {
-                          addSuffix: true,
-                        })}
+                      <p className="text-xs text-muted-foreground/70 mt-1">
+                        {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
                       </p>
                     </div>
                   </div>
@@ -216,94 +245,156 @@ function NotificationBell() {
   );
 }
 
-function NavLinks({ links, isMobile = false }: { links: typeof adminLinks; isMobile?: boolean }) {
+function NavLinks({ 
+  links, 
+  collapsed = false,
+  isMobile = false 
+}: { 
+  links: typeof adminLinks; 
+  collapsed?: boolean;
+  isMobile?: boolean;
+}) {
   const location = useLocation();
 
   return (
-    <nav className={cn("space-y-1", isMobile && "px-2")}>
-      {links.map((link) => {
-        const Icon = link.icon;
-        const isActive = location.pathname === link.to;
+    <TooltipProvider delayDuration={0}>
+      <nav className={cn("space-y-1", isMobile && "px-2")}>
+        {links.map((link) => {
+          const Icon = link.icon;
+          const isActive = location.pathname === link.to;
 
-        return (
-          <NavLink
-            key={link.to}
-            to={link.to}
-            className={cn(
-              "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
-              isActive
-                ? "bg-primary text-primary-foreground"
-                : "text-sidebar-foreground hover:bg-sidebar-accent"
-            )}
-          >
-            <Icon className="h-5 w-5" />
-            {link.label}
-            {isActive && <ChevronRight className="h-4 w-4 ml-auto" />}
-          </NavLink>
-        );
-      })}
-    </nav>
+          const linkContent = (
+            <NavLink
+              key={link.to}
+              to={link.to}
+              className={cn(
+                "flex items-center gap-3 rounded-xl text-sm font-medium transition-all",
+                collapsed ? "justify-center p-3" : "px-4 py-3",
+                isActive
+                  ? "gradient-primary text-primary-foreground shadow-lg"
+                  : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              )}
+            >
+              <Icon className={cn("shrink-0", collapsed ? "h-5 w-5" : "h-5 w-5")} />
+              {!collapsed && <span>{link.label}</span>}
+            </NavLink>
+          );
+
+          if (collapsed && !isMobile) {
+            return (
+              <Tooltip key={link.to}>
+                <TooltipTrigger asChild>
+                  {linkContent}
+                </TooltipTrigger>
+                <TooltipContent side="right" className="font-medium">
+                  {link.label}
+                </TooltipContent>
+              </Tooltip>
+            );
+          }
+
+          return linkContent;
+        })}
+      </nav>
+    </TooltipProvider>
   );
 }
 
 export default function AppLayout() {
   const { mode, isAdmin } = useMode();
+  const [collapsed, setCollapsed] = useState(false);
   const links = isAdmin ? adminLinks : staffLinks;
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-background flex w-full">
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex flex-col w-64 border-r border-sidebar-border bg-sidebar">
+      <aside 
+        className={cn(
+          "hidden lg:flex flex-col border-r border-border/50 bg-card/50 backdrop-blur-xl transition-all duration-300",
+          collapsed ? "w-[72px]" : "w-64"
+        )}
+      >
         {/* Logo */}
-        <div className="p-4 border-b border-sidebar-border">
+        <div className={cn(
+          "border-b border-border/50 transition-all",
+          collapsed ? "p-3" : "p-4"
+        )}>
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg gradient-primary">
+            <div className="p-2 rounded-xl gradient-primary shadow-lg shrink-0">
               <Store className="h-6 w-6 text-primary-foreground" />
             </div>
-            <div>
-              <h1 className="font-bold text-lg text-gradient">Om Galaxy</h1>
-              <p className="text-xs text-muted-foreground">Stock Taker</p>
-            </div>
+            {!collapsed && (
+              <div className="overflow-hidden">
+                <h1 className="font-bold text-lg text-gradient truncate">Om Galaxy</h1>
+                <p className="text-xs text-muted-foreground">Stock Taker</p>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Navigation */}
-        <ScrollArea className="flex-1 py-4 px-3">
-          <NavLinks links={links} />
+        <ScrollArea className="flex-1 py-4 px-2">
+          <NavLinks links={links} collapsed={collapsed} />
         </ScrollArea>
 
-        {/* Mode Info */}
-        <div className="p-4 border-t border-sidebar-border">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
-              {isAdmin ? <Shield className="h-5 w-5 text-primary" /> : <User className="h-5 w-5 text-primary" />}
+        {/* Collapse Button & Mode Info */}
+        <div className="border-t border-border/50 p-3">
+          {!collapsed && (
+            <div className="flex items-center gap-3 mb-3 px-2">
+              <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                {isAdmin ? (
+                  <Shield className="h-5 w-5 text-primary" />
+                ) : (
+                  <User className="h-5 w-5 text-primary" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm truncate">
+                  {isAdmin ? "Administrator" : "Staff Member"}
+                </p>
+                <Badge variant="outline" className="text-xs mt-0.5">
+                  {mode === "admin" ? "Full Access" : "Limited"}
+                </Badge>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-sm truncate">{isAdmin ? "Administrator" : "Staff Member"}</p>
-              <Badge variant="outline" className="text-xs">
-                {mode === "admin" ? "Admin" : "Staff"}
-              </Badge>
-            </div>
-          </div>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setCollapsed(!collapsed)}
+            className={cn(
+              "w-full justify-center h-9 rounded-xl hover:bg-muted/50",
+              collapsed && "px-0"
+            )}
+          >
+            {collapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <>
+                <ChevronLeft className="h-4 w-4 mr-2" />
+                <span className="text-xs">Collapse</span>
+              </>
+            )}
+          </Button>
         </div>
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-h-screen">
+      <div className="flex-1 flex flex-col min-h-screen min-w-0">
         {/* Header */}
-        <header className="h-16 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-40">
-          <div className="flex items-center justify-between h-full px-4">
+        <header className="h-16 border-b border-border/50 bg-card/30 backdrop-blur-xl sticky top-0 z-40">
+          <div className="flex items-center justify-between h-full px-4 lg:px-6">
             {/* Mobile Menu */}
             <Sheet>
               <SheetTrigger asChild className="lg:hidden">
-                <Button variant="ghost" size="icon">
+                <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl">
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-64 p-0 bg-sidebar">
-                <div className="p-4 border-b border-sidebar-border">
+              <SheetContent side="left" className="w-72 p-0 bg-card/95 backdrop-blur-xl border-r border-border/50">
+                <div className="p-4 border-b border-border/50">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg gradient-primary">
+                    <div className="p-2 rounded-xl gradient-primary">
                       <Store className="h-6 w-6 text-primary-foreground" />
                     </div>
                     <div>
@@ -315,22 +406,44 @@ export default function AppLayout() {
                 <ScrollArea className="flex-1 py-4">
                   <NavLinks links={links} isMobile />
                 </ScrollArea>
+                <div className="p-4 border-t border-border/50">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                      {isAdmin ? (
+                        <Shield className="h-5 w-5 text-primary" />
+                      ) : (
+                        <User className="h-5 w-5 text-primary" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">
+                        {isAdmin ? "Administrator" : "Staff Member"}
+                      </p>
+                      <Badge variant="outline" className="text-xs">
+                        {mode === "admin" ? "Full Access" : "Limited"}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
               </SheetContent>
             </Sheet>
 
+            {/* Desktop Logo (when sidebar collapsed) */}
             <div className="hidden lg:block" />
 
             {/* Right side actions */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 ml-auto">
               <SyncIndicator />
-              <ModeToggle />
+              <div className="hidden sm:block">
+                <ModeToggle />
+              </div>
               <NotificationBell />
             </div>
           </div>
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 p-4 lg:p-6">
+        <main className="flex-1 p-4 lg:p-6 overflow-auto">
           <Outlet />
         </main>
       </div>
