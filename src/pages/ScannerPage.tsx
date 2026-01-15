@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { motion } from "framer-motion";
 import { useMode } from "@/contexts/ModeContext";
 import { useSoundEffects } from "@/hooks/useSoundEffects";
 import { supabase } from "@/integrations/supabase/client";
+import { PageTransition, staggerContainer, staggerItem } from "@/components/PageTransition";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +39,7 @@ import {
   ChevronsUpDown,
   Eye,
   Store,
+  Smartphone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -129,7 +132,6 @@ export default function ScannerPage() {
   // Resume camera detection when pendingScan clears and camera is active
   useEffect(() => {
     if (!pendingScan && showCamera && streamRef.current) {
-      // Small delay to ensure DOM is ready
       const timeout = setTimeout(() => {
         attachStreamToVideo();
       }, 100);
@@ -141,7 +143,6 @@ export default function ScannerPage() {
     if (!("BarcodeDetector" in window)) return;
 
     try {
-      // Dynamically get all supported formats
       const supportedFormats = await (window as any).BarcodeDetector.getSupportedFormats();
       if (supportedFormats && supportedFormats.length > 0) {
         barcodeDetectorRef.current = new (window as any).BarcodeDetector({
@@ -149,7 +150,6 @@ export default function ScannerPage() {
         });
       }
     } catch {
-      // Fallback to common formats
       barcodeDetectorRef.current = new (window as any).BarcodeDetector({
         formats: [
           "qr_code", "aztec", "code_128", "code_39", "code_93",
@@ -175,10 +175,7 @@ export default function ScannerPage() {
   };
 
   const checkDuplicate = async (imei: string): Promise<boolean> => {
-    // Check session scans first
     if (sessionScans.some(s => s.imei === imei)) return true;
-    
-    // Check database
     const { data } = await supabase
       .from("stock_logs")
       .select("id")
@@ -204,10 +201,7 @@ export default function ScannerPage() {
     setIsScanning(true);
     setScanInput("");
 
-    // Check for duplicate
     const isDuplicate = await checkDuplicate(imei);
-    
-    // Show inline verification panel
     setPendingScan(imei);
     setIsPendingDuplicate(isDuplicate);
     
@@ -242,7 +236,6 @@ export default function ScannerPage() {
       playSound("success");
       toast.success("Scan saved!");
 
-      // Add to session list
       setSessionScans((prev) => [
         {
           id: data.id,
@@ -261,25 +254,21 @@ export default function ScannerPage() {
   };
 
   const rescan = () => {
-    // Blur input immediately to prevent keyboard
     if (showCamera) {
       inputRef.current?.blur();
     }
     
     setPendingScan(null);
     setIsPendingDuplicate(false);
-    setScanInput(""); // Clear any leftover input
+    setScanInput("");
     
-    // If camera is NOT active, focus input for manual scanning
     if (!showCamera) {
       setTimeout(() => {
         inputRef.current?.focus();
       }, 50);
     }
-    // Camera resume is handled by useEffect watching pendingScan
   };
 
-  // Handle Enter key for scan or confirm
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -287,7 +276,6 @@ export default function ScannerPage() {
     }
   };
 
-  // Handle Enter/Escape key on verification panel
   const handleVerificationKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !isPendingDuplicate) {
       e.preventDefault();
@@ -299,14 +287,12 @@ export default function ScannerPage() {
     }
   };
 
-  // Camera scanning with enhanced BarcodeDetector
   const startCamera = async () => {
     const getStream = async (constraints: MediaStreamConstraints) => {
       return navigator.mediaDevices.getUserMedia(constraints);
     };
 
     try {
-      // Attempt 1: HD with environment camera (best for scanning)
       streamRef.current = await getStream({
         video: { 
           facingMode: "environment",
@@ -316,13 +302,11 @@ export default function ScannerPage() {
       });
     } catch {
       try {
-        // Attempt 2: Standard environment camera
         streamRef.current = await getStream({
           video: { facingMode: "environment" }
         });
       } catch {
         try {
-          // Attempt 3: Any camera (fallback for desktop)
           streamRef.current = await getStream({ video: true });
         } catch {
           toast.error("Could not access camera. Check permissions.");
@@ -359,7 +343,6 @@ export default function ScannerPage() {
           const rawValue = barcodes[0].rawValue;
           if (rawValue) {
             setScanInput(rawValue);
-            // Auto-trigger scan
             handleScanFromCamera(rawValue);
           }
         }
@@ -410,462 +393,534 @@ export default function ScannerPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
-      {/* Header with Session Counter */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Stock Scanner</h1>
-          <p className="text-muted-foreground">Scan products to add to inventory</p>
-        </div>
-        <div className="flex gap-2 items-center">
+    <PageTransition>
+      <div className="h-full flex flex-col gap-6">
+        {/* Header */}
+        <motion.div 
+          variants={staggerItem}
+          className="flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+        >
+          <div className="flex items-center gap-4">
+            <div className="h-14 w-14 rounded-2xl gradient-primary flex items-center justify-center shadow-lg glow-primary">
+              <ScanBarcode className="h-7 w-7 text-primary-foreground" />
+            </div>
+            <div>
+              <h1 className="text-2xl lg:text-3xl font-bold">Stock Scanner</h1>
+              <p className="text-muted-foreground">Scan products to add to inventory</p>
+            </div>
+          </div>
           <Button
             variant="outline"
-            size="sm"
             onClick={() => setShowSessionList(true)}
-            className="gap-2"
+            className="h-12 px-6 gap-2 border-border/50"
           >
-            <List className="h-4 w-4" />
+            <List className="h-5 w-5" />
             Session: {sessionScans.length} Pcs
           </Button>
-        </div>
-      </div>
+        </motion.div>
 
-      {/* Outlet Selection */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Store className="h-5 w-5" />
-            Select Outlet
-          </CardTitle>
-          <CardDescription>Choose the outlet for stock entry</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Popover open={outletOpen} onOpenChange={setOutletOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                role="combobox"
-                aria-expanded={outletOpen}
-                className="w-full justify-between h-12 text-left"
-              >
-                {selectedOutlet ? (
-                  <span>
-                    {selectedOutlet.name} ({selectedOutlet.code})
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground">Select an outlet...</span>
-                )}
-                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-full p-0" align="start">
-              <Command>
-                <CommandInput placeholder="Search outlets..." />
-                <CommandList>
-                  <CommandEmpty>No outlets found.</CommandEmpty>
-                  <CommandGroup>
-                    {outlets.map((outlet) => (
-                      <CommandItem
-                        key={outlet.id}
-                        value={`${outlet.name} ${outlet.code}`}
-                        onSelect={() => {
-                          setSelectedOutlet(outlet);
-                          setOutletOpen(false);
-                          setSessionScans([]); // Reset session when outlet changes
-                        }}
-                      >
-                        <Check
-                          className={cn(
-                            "mr-2 h-4 w-4",
-                            selectedOutlet?.id === outlet.id ? "opacity-100" : "opacity-0"
-                          )}
-                        />
-                        <div>
-                          <p className="font-medium">{outlet.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Code: {outlet.code} {outlet.address && `• ${outlet.address}`}
-                          </p>
-                        </div>
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
-        </CardContent>
-      </Card>
-
-      {/* Product Selection with Click to View Scans */}
-      <Card className={cn(!selectedOutlet && "opacity-50")}>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Package className="h-5 w-5" />
-            Select Product
-          </CardTitle>
-          <CardDescription>Choose the product you're scanning</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <Popover open={productOpen} onOpenChange={setProductOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                role="combobox"
-                aria-expanded={productOpen}
-                className="w-full justify-between h-12 text-left"
-              >
-                {selectedProduct ? (
-                  <span>
-                    {selectedProduct.name} {selectedProduct.color && `- ${selectedProduct.color}`}{" "}
-                    {selectedProduct.specs && `(${selectedProduct.specs})`}
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground">Select a product...</span>
-                )}
-                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-full p-0" align="start">
-              <Command>
-                <CommandInput placeholder="Search products..." />
-                <CommandList>
-                  <CommandEmpty>No products found.</CommandEmpty>
-                  <CommandGroup>
-                    {products.map((product) => (
-                      <CommandItem
-                        key={product.id}
-                        value={`${product.name} ${product.model} ${product.color || ""}`}
-                        onSelect={() => {
-                          setSelectedProduct(product);
-                          setProductOpen(false);
-                          setSessionScans([]); // Reset session when product changes
-                        }}
-                      >
-                        <Check
-                          className={cn(
-                            "mr-2 h-4 w-4",
-                            selectedProduct?.id === product.id ? "opacity-100" : "opacity-0"
-                          )}
-                        />
-                        <div>
-                          <p className="font-medium">{product.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {product.category} {product.color && `• ${product.color}`}{" "}
-                            {product.specs && `• ${product.specs}`}
-                          </p>
-                        </div>
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
-
-          {/* View scanned items link */}
-          {selectedProduct && sessionScans.length > 0 && (
-            <button
-              onClick={() => setShowSessionList(true)}
-              className="flex items-center gap-1 text-xs text-primary hover:underline"
-            >
-              <Eye className="h-3 w-3" />
-              View {sessionScans.length} scanned items
-            </button>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Camera View - Always mounted when showCamera is true to prevent ref loss */}
-      {showCamera && (
-        <Card className={cn(pendingScan && "opacity-50")}>
-          <CardContent className="p-4">
-            <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover"
-              />
-              {/* Scan line animation */}
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-4/5 h-0.5 bg-destructive shadow-[0_0_10px_hsl(var(--destructive))] animate-pulse" />
-              </div>
-              {/* Corner guides */}
-              <div className="absolute inset-8 border-2 border-primary/50 rounded-lg pointer-events-none" />
-              {!pendingScan && (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="absolute top-4 right-4"
-                  onClick={stopCamera}
-                >
-                  <X className="h-4 w-4 mr-2" />
-                  Close
-                </Button>
-              )}
-              {pendingScan && (
-                <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
-                  <p className="text-sm font-medium">Verification in progress...</p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Inline Verification Panel */}
-      {pendingScan && (
-        <Card 
-          className={cn(
-            "border-2 animate-in zoom-in-95 duration-200",
-            isPendingDuplicate ? "border-destructive bg-destructive/5" : "border-primary"
-          )}
-          onKeyDown={handleVerificationKeyDown}
-          tabIndex={0}
+        {/* Stats Cards */}
+        <motion.div 
+          variants={staggerContainer}
+          initial="initial"
+          animate="animate"
+          className="grid grid-cols-3 gap-4"
         >
-          <CardContent className="p-6">
-            <div className="text-center space-y-4">
-              <h3 className={cn(
-                "text-sm font-bold uppercase tracking-widest",
-                isPendingDuplicate ? "text-destructive" : "text-muted-foreground"
-              )}>
-                {isPendingDuplicate ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <AlertTriangle className="h-4 w-4" />
-                    Duplicate Detected
-                  </span>
-                ) : (
-                  "Verify Scan"
-                )}
-              </h3>
-
-              <div className={cn(
-                "p-4 rounded-lg border",
-                isPendingDuplicate 
-                  ? "bg-destructive/10 border-destructive/30" 
-                  : "bg-muted border-border"
-              )}>
-                <p className="font-mono text-2xl md:text-3xl font-bold break-all">
-                  {pendingScan}
-                </p>
-                {isPendingDuplicate && (
-                  <p className="text-destructive text-xs font-bold uppercase mt-2 animate-pulse">
-                    This barcode has already been scanned!
-                  </p>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
-                  <p className="text-xs text-muted-foreground mb-1">Outlet</p>
-                  <p className="font-medium">{selectedOutlet?.name}</p>
+          <motion.div variants={staggerItem}>
+            <Card className="bg-card/80 backdrop-blur border-border/50 overflow-hidden relative">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent" />
+              <CardContent className="p-5 relative">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-muted-foreground text-sm font-medium">This Session</p>
+                    <p className="text-4xl font-bold text-foreground mt-1">{sessionScans.length}</p>
+                  </div>
+                  <div className="h-12 w-12 rounded-xl bg-primary/20 flex items-center justify-center">
+                    <Smartphone className="h-6 w-6 text-primary" />
+                  </div>
                 </div>
-                <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
-                  <p className="text-xs text-muted-foreground mb-1">Product</p>
-                  <p className="font-medium">{getProductDisplayName(selectedProduct)}</p>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div variants={staggerItem}>
+            <Card className="bg-card/80 backdrop-blur border-border/50 overflow-hidden relative">
+              <div className="absolute inset-0 bg-gradient-to-br from-secondary/10 to-transparent" />
+              <CardContent className="p-5 relative">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-muted-foreground text-sm font-medium">Selected Product</p>
+                    <p className="text-lg font-bold text-foreground mt-1 truncate max-w-32">
+                      {selectedProduct?.name || "None"}
+                    </p>
+                  </div>
+                  <div className="h-12 w-12 rounded-xl bg-secondary/20 flex items-center justify-center">
+                    <Package className="h-6 w-6 text-secondary-foreground" />
+                  </div>
                 </div>
-              </div>
+              </CardContent>
+            </Card>
+          </motion.div>
 
-              <div className="grid grid-cols-2 gap-4 pt-2">
-                <Button
-                  variant="outline"
-                  size="lg"
-                  onClick={rescan}
-                  className="h-14 flex flex-col gap-1"
-                >
-                  <RefreshCw className="h-5 w-5" />
-                  <span>Re-Scan</span>
-                </Button>
-                <Button
-                  ref={confirmBtnRef}
-                  size="lg"
-                  onClick={confirmScan}
-                  disabled={isPendingDuplicate}
-                  className={cn(
-                    "h-14 flex flex-col gap-1",
-                    isPendingDuplicate 
-                      ? "bg-destructive/20 text-destructive cursor-not-allowed" 
-                      : "gradient-primary"
-                  )}
-                >
-                  {isPendingDuplicate ? (
-                    <>
-                      <X className="h-5 w-5" />
-                      <span>Blocked</span>
-                    </>
-                  ) : (
-                    <>
-                      <ChevronRight className="h-5 w-5" />
-                      <span>Scan Next</span>
-                    </>
-                  )}
-                </Button>
-              </div>
+          <motion.div variants={staggerItem}>
+            <Card className="bg-card/80 backdrop-blur border-border/50 overflow-hidden relative">
+              <div className="absolute inset-0 bg-gradient-to-br from-success/10 to-transparent" />
+              <CardContent className="p-5 relative">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-muted-foreground text-sm font-medium">Outlet</p>
+                    <p className="text-lg font-bold text-foreground mt-1 truncate max-w-32">
+                      {selectedOutlet?.name || "None"}
+                    </p>
+                  </div>
+                  <div className="h-12 w-12 rounded-xl bg-success/20 flex items-center justify-center">
+                    <Store className="h-6 w-6 text-success" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </motion.div>
 
-              <p className="text-xs text-muted-foreground">
-                {isPendingDuplicate 
-                  ? "Please Re-Scan a different item" 
-                  : "Press Enter to confirm"
-                }
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+        {/* Main Content Grid */}
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-auto">
+          {/* Left Column - Selection & Scanner */}
+          <motion.div variants={staggerItem} className="space-y-4">
+            {/* Outlet Selection */}
+            <Card className="bg-card/80 backdrop-blur border-border/50">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Store className="h-5 w-5 text-primary" />
+                  Select Outlet
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Popover open={outletOpen} onOpenChange={setOutletOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={outletOpen}
+                      className="w-full justify-between h-12 text-left border-border/50"
+                    >
+                      {selectedOutlet ? (
+                        <span>{selectedOutlet.name} ({selectedOutlet.code})</span>
+                      ) : (
+                        <span className="text-muted-foreground">Select an outlet...</span>
+                      )}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search outlets..." />
+                      <CommandList>
+                        <CommandEmpty>No outlets found.</CommandEmpty>
+                        <CommandGroup>
+                          {outlets.map((outlet) => (
+                            <CommandItem
+                              key={outlet.id}
+                              value={`${outlet.name} ${outlet.code}`}
+                              onSelect={() => {
+                                setSelectedOutlet(outlet);
+                                setOutletOpen(false);
+                                setSessionScans([]);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  selectedOutlet?.id === outlet.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              <div>
+                                <p className="font-medium">{outlet.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  Code: {outlet.code} {outlet.address && `• ${outlet.address}`}
+                                </p>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </CardContent>
+            </Card>
 
-      {/* Scanner Input (hidden when verification is shown) */}
-      {!pendingScan && (
-        <Card className={cn(selectedProduct ? "border-primary/50" : "opacity-75")}>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <ScanBarcode className="h-5 w-5" />
-              Scan IMEI / Barcode
-            </CardTitle>
-            <CardDescription>
-              {selectedProduct
-                ? `Scanning for: ${selectedProduct.name}`
-                : "Select a product above first"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="relative">
-              <Input
-                ref={inputRef}
-                value={scanInput}
-                onChange={(e) => setScanInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Scan or enter IMEI/barcode..."
-                className="h-16 text-xl font-mono scanner-input pr-12"
-                disabled={!selectedProduct}
-              />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute right-2 top-1/2 -translate-y-1/2"
-                onClick={showCamera ? stopCamera : startCamera}
-                disabled={!selectedProduct}
+            {/* Product Selection */}
+            <Card className={cn("bg-card/80 backdrop-blur border-border/50", !selectedOutlet && "opacity-50")}>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Package className="h-5 w-5 text-primary" />
+                  Select Product
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Popover open={productOpen} onOpenChange={setProductOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={productOpen}
+                      className="w-full justify-between h-12 text-left border-border/50"
+                    >
+                      {selectedProduct ? (
+                        <span>
+                          {selectedProduct.name} {selectedProduct.color && `- ${selectedProduct.color}`}{" "}
+                          {selectedProduct.specs && `(${selectedProduct.specs})`}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">Select a product...</span>
+                      )}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search products..." />
+                      <CommandList>
+                        <CommandEmpty>No products found.</CommandEmpty>
+                        <CommandGroup>
+                          {products.map((product) => (
+                            <CommandItem
+                              key={product.id}
+                              value={`${product.name} ${product.model} ${product.color || ""}`}
+                              onSelect={() => {
+                                setSelectedProduct(product);
+                                setProductOpen(false);
+                                setSessionScans([]);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  selectedProduct?.id === product.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              <div>
+                                <p className="font-medium">{product.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {product.category} {product.color && `• ${product.color}`}{" "}
+                                  {product.specs && `• ${product.specs}`}
+                                </p>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+
+                {selectedProduct && sessionScans.length > 0 && (
+                  <button
+                    onClick={() => setShowSessionList(true)}
+                    className="flex items-center gap-1 text-xs text-primary hover:underline"
+                  >
+                    <Eye className="h-3 w-3" />
+                    View {sessionScans.length} scanned items
+                  </button>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Scanner Input */}
+            {!pendingScan && (
+              <Card className={cn("bg-card/80 backdrop-blur border-border/50", selectedProduct ? "border-primary/30" : "opacity-75")}>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <ScanBarcode className="h-5 w-5 text-primary" />
+                    Scan IMEI / Barcode
+                  </CardTitle>
+                  <CardDescription>
+                    {selectedProduct
+                      ? `Scanning for: ${selectedProduct.name}`
+                      : "Select a product above first"}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="relative">
+                    <Input
+                      ref={inputRef}
+                      value={scanInput}
+                      onChange={(e) => setScanInput(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder="Scan or enter IMEI/barcode..."
+                      className="h-16 text-xl font-mono scanner-input pr-12 bg-muted/50 border-border/50"
+                      disabled={!selectedProduct}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-2 top-1/2 -translate-y-1/2"
+                      onClick={showCamera ? stopCamera : startCamera}
+                      disabled={!selectedProduct}
+                    >
+                      {showCamera ? (
+                        <X className="h-5 w-5 text-destructive" />
+                      ) : (
+                        <Camera className="h-5 w-5" />
+                      )}
+                    </Button>
+                  </div>
+
+                  <Button
+                    onClick={handleScan}
+                    disabled={!selectedProduct || !scanInput.trim() || isScanning}
+                    className="w-full h-12 gradient-primary text-primary-foreground"
+                  >
+                    {isScanning ? (
+                      <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Check className="h-4 w-4 mr-2" />
+                    )}
+                    Submit Scan
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+          </motion.div>
+
+          {/* Right Column - Camera & Verification */}
+          <motion.div variants={staggerItem} className="space-y-4">
+            {/* Camera View */}
+            {showCamera && (
+              <Card className={cn("bg-card/80 backdrop-blur border-border/50", pendingScan && "opacity-50")}>
+                <CardContent className="p-4">
+                  <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="w-4/5 h-0.5 bg-destructive shadow-[0_0_10px_hsl(var(--destructive))] animate-pulse" />
+                    </div>
+                    <div className="absolute inset-8 border-2 border-primary/50 rounded-lg pointer-events-none" />
+                    {!pendingScan && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className="absolute top-4 right-4"
+                        onClick={stopCamera}
+                      >
+                        <X className="h-4 w-4 mr-2" />
+                        Close
+                      </Button>
+                    )}
+                    {pendingScan && (
+                      <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
+                        <p className="text-sm font-medium">Verification in progress...</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Inline Verification Panel */}
+            {pendingScan && (
+              <Card 
+                className={cn(
+                  "border-2 animate-in zoom-in-95 duration-200 bg-card/80 backdrop-blur",
+                  isPendingDuplicate ? "border-destructive bg-destructive/5" : "border-primary"
+                )}
+                onKeyDown={handleVerificationKeyDown}
+                tabIndex={0}
               >
-                {showCamera ? (
-                  <X className="h-5 w-5 text-destructive" />
-                ) : (
-                  <Camera className="h-5 w-5" />
-                )}
+                <CardContent className="p-6">
+                  <div className="text-center space-y-4">
+                    <h3 className={cn(
+                      "text-sm font-bold uppercase tracking-widest",
+                      isPendingDuplicate ? "text-destructive" : "text-muted-foreground"
+                    )}>
+                      {isPendingDuplicate ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <AlertTriangle className="h-4 w-4" />
+                          Duplicate Detected
+                        </span>
+                      ) : (
+                        "Verify Scan"
+                      )}
+                    </h3>
+
+                    <div className={cn(
+                      "p-4 rounded-lg border",
+                      isPendingDuplicate 
+                        ? "bg-destructive/10 border-destructive/30" 
+                        : "bg-muted border-border"
+                    )}>
+                      <p className="font-mono text-2xl md:text-3xl font-bold break-all">
+                        {pendingScan}
+                      </p>
+                      {isPendingDuplicate && (
+                        <p className="text-destructive text-xs font-bold uppercase mt-2 animate-pulse">
+                          This barcode has already been scanned!
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+                        <p className="text-xs text-muted-foreground mb-1">Outlet</p>
+                        <p className="font-medium">{selectedOutlet?.name}</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+                        <p className="text-xs text-muted-foreground mb-1">Product</p>
+                        <p className="font-medium">{getProductDisplayName(selectedProduct)}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 pt-2">
+                      <Button
+                        variant="outline"
+                        size="lg"
+                        onClick={rescan}
+                        className="h-14 flex flex-col gap-1"
+                      >
+                        <RefreshCw className="h-5 w-5" />
+                        <span>Re-Scan</span>
+                      </Button>
+                      <Button
+                        ref={confirmBtnRef}
+                        size="lg"
+                        onClick={confirmScan}
+                        disabled={isPendingDuplicate}
+                        className={cn(
+                          "h-14 flex flex-col gap-1",
+                          isPendingDuplicate 
+                            ? "bg-destructive/20 text-destructive cursor-not-allowed" 
+                            : "gradient-primary text-primary-foreground"
+                        )}
+                      >
+                        {isPendingDuplicate ? (
+                          <>
+                            <X className="h-5 w-5" />
+                            <span>Blocked</span>
+                          </>
+                        ) : (
+                          <>
+                            <ChevronRight className="h-5 w-5" />
+                            <span>Scan Next</span>
+                          </>
+                        )}
+                      </Button>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground">
+                      {isPendingDuplicate 
+                        ? "Please Re-Scan a different item" 
+                        : "Press Enter to confirm"
+                      }
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Recent Scans */}
+            {sessionScans.length > 0 && !pendingScan && (
+              <Card className="bg-card/80 backdrop-blur border-border/50">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg">Recent Scans</CardTitle>
+                    <span className="text-xs text-muted-foreground">Last 5 items</span>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {sessionScans.slice(0, 5).map((scan, index) => (
+                      <div
+                        key={scan.id}
+                        className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted/70 transition"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="font-mono text-sm md:text-base font-medium truncate text-primary">
+                            {scan.imei}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {scan.product_name} • {scan.outlet_name}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 ml-2">
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            {new Date(scan.scanned_at).toLocaleTimeString()}
+                          </span>
+                          <Badge variant="outline" className="text-success border-success shrink-0">
+                            <Check className="h-3 w-3" />
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </motion.div>
+        </div>
+
+        {/* Session List Dialog */}
+        <Dialog open={showSessionList} onOpenChange={setShowSessionList}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                Session Scans
+                <Badge variant="secondary">{sessionScans.length} Pcs</Badge>
+              </DialogTitle>
+              <DialogDescription>
+                {selectedProduct 
+                  ? `All items scanned for ${selectedProduct.name}`
+                  : "All items scanned in this session"
+                }
+              </DialogDescription>
+            </DialogHeader>
+
+            <ScrollArea className="h-80">
+              {sessionScans.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+                  <Package className="h-12 w-12 mb-2 opacity-50" />
+                  <p>No items scanned yet</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <div className="grid grid-cols-[2rem_1fr_1fr_auto] gap-2 text-xs text-muted-foreground uppercase tracking-wider p-2 bg-muted/50 rounded sticky top-0">
+                    <span>#</span>
+                    <span>Barcode/IMEI</span>
+                    <span>Product</span>
+                    <span>Time</span>
+                  </div>
+                  {sessionScans.map((scan, index) => (
+                    <div
+                      key={scan.id}
+                      className="grid grid-cols-[2rem_1fr_1fr_auto] gap-2 items-center p-2 rounded hover:bg-muted/50 text-sm"
+                    >
+                      <span className="text-muted-foreground">{sessionScans.length - index}</span>
+                      <span className="font-mono text-primary truncate">{scan.imei}</span>
+                      <span className="truncate">{scan.product_name}</span>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        {new Date(scan.scanned_at).toLocaleTimeString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+
+            <div className="flex justify-between items-center pt-2 border-t">
+              <span className="text-sm text-muted-foreground">
+                Total: {sessionScans.length} items
+              </span>
+              <Button onClick={() => setShowSessionList(false)}>
+                Close & Resume
               </Button>
             </div>
-
-            <Button
-              onClick={handleScan}
-              disabled={!selectedProduct || !scanInput.trim() || isScanning}
-              className="w-full gradient-primary"
-            >
-              {isScanning ? (
-                <RefreshCw className="h-4 w-4 animate-spin mr-2" />
-              ) : (
-                <Check className="h-4 w-4 mr-2" />
-              )}
-              Submit Scan
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Recent Scans - Enhanced Display */}
-      {sessionScans.length > 0 && !pendingScan && (
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg">Recent Scans</CardTitle>
-              <span className="text-xs text-muted-foreground">Last 5 items</span>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {sessionScans.slice(0, 5).map((scan, index) => (
-                <div
-                  key={scan.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted/70 transition"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="font-mono text-sm md:text-base font-medium truncate text-primary">
-                      {scan.imei}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {scan.product_name} • {scan.outlet_name}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 ml-2">
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">
-                      {new Date(scan.scanned_at).toLocaleTimeString()}
-                    </span>
-                    <Badge variant="outline" className="text-success border-success shrink-0">
-                      <Check className="h-3 w-3" />
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Session List Dialog */}
-      <Dialog open={showSessionList} onOpenChange={setShowSessionList}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              Session Scans
-              <Badge variant="secondary">{sessionScans.length} Pcs</Badge>
-            </DialogTitle>
-            <DialogDescription>
-              {selectedProduct 
-                ? `All items scanned for ${selectedProduct.name}`
-                : "All items scanned in this session"
-              }
-            </DialogDescription>
-          </DialogHeader>
-
-          <ScrollArea className="h-80">
-            {sessionScans.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-                <Package className="h-12 w-12 mb-2 opacity-50" />
-                <p>No items scanned yet</p>
-              </div>
-            ) : (
-              <div className="space-y-1">
-                <div className="grid grid-cols-[2rem_1fr_1fr_auto] gap-2 text-xs text-muted-foreground uppercase tracking-wider p-2 bg-muted/50 rounded sticky top-0">
-                  <span>#</span>
-                  <span>Barcode/IMEI</span>
-                  <span>Product</span>
-                  <span>Time</span>
-                </div>
-                {sessionScans.map((scan, index) => (
-                  <div
-                    key={scan.id}
-                    className="grid grid-cols-[2rem_1fr_1fr_auto] gap-2 items-center p-2 rounded hover:bg-muted/50 text-sm"
-                  >
-                    <span className="text-muted-foreground">{sessionScans.length - index}</span>
-                    <span className="font-mono text-primary truncate">{scan.imei}</span>
-                    <span className="truncate">{scan.product_name}</span>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">
-                      {new Date(scan.scanned_at).toLocaleTimeString()}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </ScrollArea>
-
-          <div className="flex justify-between items-center pt-2 border-t">
-            <span className="text-sm text-muted-foreground">
-              Total: {sessionScans.length} items
-            </span>
-            <Button onClick={() => setShowSessionList(false)}>
-              Close & Resume
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </PageTransition>
   );
 }

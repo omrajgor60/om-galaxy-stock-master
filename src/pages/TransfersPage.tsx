@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { motion } from "framer-motion";
 import { useMode } from "@/contexts/ModeContext";
 import { supabase } from "@/integrations/supabase/client";
+import { PageTransition, staggerContainer, staggerItem } from "@/components/PageTransition";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,14 +19,6 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useSoundEffects } from "@/hooks/useSoundEffects";
@@ -43,6 +37,7 @@ import {
   Camera,
   XCircle,
   Ban,
+  Truck,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -100,7 +95,6 @@ export default function TransfersPage() {
   const { isAdmin } = useMode();
   const { playSound } = useSoundEffects();
 
-  // Camera refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const barcodeDetectorRef = useRef<any>(null);
@@ -116,11 +110,8 @@ export default function TransfersPage() {
   const [notes, setNotes] = useState("");
   const [isTransferring, setIsTransferring] = useState(false);
   
-  // Bulk transfer state
   const [isBulkMode, setIsBulkMode] = useState(false);
   const [bulkItems, setBulkItems] = useState<BulkItem[]>([]);
-  
-  // Camera state
   const [showCamera, setShowCamera] = useState(false);
   
   const [recentTransfers, setRecentTransfers] = useState<Transfer[]>([]);
@@ -167,7 +158,6 @@ export default function TransfersPage() {
     setIsLoadingTransfers(false);
   };
 
-  // Camera functions
   const initBarcodeDetector = async () => {
     if (!("BarcodeDetector" in window)) return;
 
@@ -190,26 +180,16 @@ export default function TransfersPage() {
   };
 
   const startCamera = async () => {
-    const getStream = async (constraints: MediaStreamConstraints) => {
-      return navigator.mediaDevices.getUserMedia(constraints);
-    };
-
     try {
-      streamRef.current = await getStream({
-        video: { 
-          facingMode: "environment",
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
-        }
+      streamRef.current = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } }
       });
     } catch {
       try {
-        streamRef.current = await getStream({
-          video: { facingMode: "environment" }
-        });
+        streamRef.current = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
       } catch {
         try {
-          streamRef.current = await getStream({ video: true });
+          streamRef.current = await navigator.mediaDevices.getUserMedia({ video: true });
         } catch {
           toast.error("Could not access camera. Check permissions.");
           return;
@@ -247,14 +227,11 @@ export default function TransfersPage() {
             handleScanFromCamera(rawValue);
           }
         }
-      } catch {
-        // Detection failed, continue
-      }
+      } catch {}
     }, 500);
   };
 
   const handleScanFromCamera = async (code: string) => {
-    // Check if already added in bulk mode
     if (isBulkMode && bulkItems.some(b => b.imei === code)) {
       playSound("warning");
       toast.warning("IMEI already in batch");
@@ -262,8 +239,6 @@ export default function TransfersPage() {
     }
 
     setImeiInput(code);
-    
-    // Validate and add
     const item = await validateImei(code);
     if (!item) return;
 
@@ -299,10 +274,7 @@ export default function TransfersPage() {
     const { data, error } = await supabase
       .from("stock_logs")
       .select(`
-        id,
-        imei,
-        product_id,
-        outlet_id,
+        id, imei, product_id, outlet_id,
         product:products!product_id(name, color),
         outlet:outlets!outlet_id(name, code)
       `)
@@ -336,7 +308,6 @@ export default function TransfersPage() {
     const item = await validateImei();
     if (!item) return;
 
-    // Check if already added
     if (bulkItems.some(b => b.id === item.id)) {
       toast.error("IMEI already added to batch");
       return;
@@ -365,7 +336,6 @@ export default function TransfersPage() {
     setIsTransferring(true);
 
     try {
-      // Create transfer record with 'in_transit' status (stock stays at origin until accepted)
       const { error: transferError } = await supabase
         .from("stock_transfers")
         .insert({
@@ -379,12 +349,9 @@ export default function TransfersPage() {
 
       if (transferError) throw transferError;
 
-      // Do NOT update stock_log outlet_id here - it stays at origin until receiving shop accepts
-
       playSound("success");
       toast.success("Transfer initiated! Item is now in transit.");
 
-      // Reset form
       setStockItem(null);
       setImeiInput("");
       setNotes("");
@@ -403,7 +370,6 @@ export default function TransfersPage() {
       return;
     }
 
-    // Filter items that can be transferred (not already at destination)
     const transferableItems = bulkItems.filter(item => item.outlet_id !== toOutlet.id);
     
     if (transferableItems.length === 0) {
@@ -414,7 +380,6 @@ export default function TransfersPage() {
     setIsTransferring(true);
 
     try {
-      // Create transfer records for all items with 'in_transit' status
       const transferRecords = transferableItems.map(item => ({
         stock_log_id: item.id,
         from_outlet_id: item.outlet_id,
@@ -430,12 +395,9 @@ export default function TransfersPage() {
 
       if (transferError) throw transferError;
 
-      // Do NOT update stock_logs outlet_id - items stay at origin until receiving shop accepts
-
       playSound("success");
       toast.success(`${transferableItems.length} items are now in transit!`);
 
-      // Reset form
       setBulkItems([]);
       setImeiInput("");
       setNotes("");
@@ -474,442 +436,388 @@ export default function TransfersPage() {
     }
   };
 
-  return (
-    <div className="space-y-6 max-w-6xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-bold">Stock Transfers</h1>
-        <p className="text-muted-foreground">Move inventory between outlets</p>
-      </div>
+  const inTransitCount = recentTransfers.filter(t => t.status === "in_transit").length;
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Transfer Form */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
+  return (
+    <PageTransition>
+      <div className="h-full flex flex-col gap-6">
+        {/* Header */}
+        <motion.div 
+          variants={staggerItem}
+          className="flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+        >
+          <div className="flex items-center gap-4">
+            <div className="h-14 w-14 rounded-2xl gradient-primary flex items-center justify-center shadow-lg glow-primary">
+              <ArrowRightLeft className="h-7 w-7 text-primary-foreground" />
+            </div>
+            <div>
+              <h1 className="text-2xl lg:text-3xl font-bold">Stock Transfers</h1>
+              <p className="text-muted-foreground">Move inventory between outlets</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Badge variant={inTransitCount > 0 ? "default" : "secondary"} className="text-lg px-3 py-1">
+              <Truck className="h-4 w-4 mr-2" />
+              {inTransitCount} In Transit
+            </Badge>
+          </div>
+        </motion.div>
+
+        {/* Stats Cards */}
+        <motion.div 
+          variants={staggerContainer}
+          initial="initial"
+          animate="animate"
+          className="grid grid-cols-3 gap-4"
+        >
+          <motion.div variants={staggerItem}>
+            <Card className="bg-card/80 backdrop-blur border-border/50 overflow-hidden relative">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent" />
+              <CardContent className="p-5 relative">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-muted-foreground text-sm font-medium">In Transit</p>
+                    <p className="text-4xl font-bold text-foreground mt-1">{inTransitCount}</p>
+                  </div>
+                  <div className="h-12 w-12 rounded-xl bg-primary/20 flex items-center justify-center">
+                    <Truck className="h-6 w-6 text-primary" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div variants={staggerItem}>
+            <Card className="bg-card/80 backdrop-blur border-border/50 overflow-hidden relative">
+              <div className="absolute inset-0 bg-gradient-to-br from-success/10 to-transparent" />
+              <CardContent className="p-5 relative">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-muted-foreground text-sm font-medium">Completed</p>
+                    <p className="text-4xl font-bold text-foreground mt-1">
+                      {recentTransfers.filter(t => t.status === "completed").length}
+                    </p>
+                  </div>
+                  <div className="h-12 w-12 rounded-xl bg-success/20 flex items-center justify-center">
+                    <Check className="h-6 w-6 text-success" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div variants={staggerItem}>
+            <Card className="bg-card/80 backdrop-blur border-border/50 overflow-hidden relative">
+              <div className="absolute inset-0 bg-gradient-to-br from-secondary/10 to-transparent" />
+              <CardContent className="p-5 relative">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-muted-foreground text-sm font-medium">Mode</p>
+                    <p className="text-lg font-bold text-foreground mt-1">
+                      {isBulkMode ? "Bulk" : "Single"}
+                    </p>
+                  </div>
+                  <Button
+                    variant={isBulkMode ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setIsBulkMode(!isBulkMode);
+                      setBulkItems([]);
+                      setStockItem(null);
+                      setImeiInput("");
+                    }}
+                  >
+                    <Layers className="h-4 w-4 mr-1" />
+                    {isBulkMode ? "Single" : "Bulk"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </motion.div>
+
+        {/* Main Content Grid */}
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-auto">
+          {/* Transfer Form */}
+          <motion.div variants={staggerItem}>
+            <Card className="bg-card/80 backdrop-blur border-border/50 h-full">
+              <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2">
-                  {isBulkMode ? <Layers className="h-5 w-5" /> : <ArrowRightLeft className="h-5 w-5" />}
+                  {isBulkMode ? <Layers className="h-5 w-5 text-primary" /> : <ArrowRightLeft className="h-5 w-5 text-primary" />}
                   {isBulkMode ? "Bulk Transfer" : "Single Transfer"}
                 </CardTitle>
                 <CardDescription>
-                  {isBulkMode 
-                    ? "Scan multiple IMEIs to transfer at once" 
-                    : "Scan IMEI and select destination outlet"}
+                  {isBulkMode ? "Scan multiple IMEIs to transfer at once" : "Scan IMEI and select destination outlet"}
                 </CardDescription>
-              </div>
-              <Button
-                variant={isBulkMode ? "default" : "outline"}
-                size="sm"
-                onClick={() => {
-                  setIsBulkMode(!isBulkMode);
-                  setBulkItems([]);
-                  setStockItem(null);
-                  setImeiInput("");
-                }}
-              >
-                <Layers className="h-4 w-4 mr-1" />
-                {isBulkMode ? "Single Mode" : "Bulk Mode"}
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Camera View */}
-            {showCamera && (
-              <div className="relative rounded-lg overflow-hidden bg-black aspect-video">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-64 h-32 border-2 border-primary rounded-lg opacity-70" />
-                </div>
-                <div className="absolute top-2 right-2">
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={stopCamera}
-                  >
-                    <XCircle className="h-4 w-4 mr-1" />
-                    Close
-                  </Button>
-                </div>
-                <div className="absolute bottom-2 left-2 right-2 text-center">
-                  <Badge variant="secondary" className="bg-background/80">
-                    {isBulkMode 
-                      ? `Scanning... ${bulkItems.length} items added` 
-                      : "Point camera at barcode"}
-                  </Badge>
-                </div>
-              </div>
-            )}
-
-            {/* Step 1: Scan IMEI */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label className="flex items-center gap-2">
-                  <ScanBarcode className="h-4 w-4" />
-                  Step 1: Scan IMEI {isBulkMode && `(${bulkItems.length} items added)`}
-                </Label>
-                {isBulkMode && (
-                  <Button
-                    variant={showCamera ? "destructive" : "outline"}
-                    size="sm"
-                    onClick={showCamera ? stopCamera : startCamera}
-                    className="gap-1"
-                  >
-                    <Camera className="h-4 w-4" />
-                    {showCamera ? "Stop" : "Scan"}
-                  </Button>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Camera View */}
+                {showCamera && (
+                  <div className="relative rounded-lg overflow-hidden bg-black aspect-video">
+                    <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="w-64 h-32 border-2 border-primary rounded-lg opacity-70" />
+                    </div>
+                    <div className="absolute top-2 right-2">
+                      <Button variant="destructive" size="sm" onClick={stopCamera}>
+                        <XCircle className="h-4 w-4 mr-1" />
+                        Close
+                      </Button>
+                    </div>
+                    <div className="absolute bottom-2 left-2 right-2 text-center">
+                      <Badge variant="secondary" className="bg-background/80">
+                        {isBulkMode ? `Scanning... ${bulkItems.length} items added` : "Point camera at barcode"}
+                      </Badge>
+                    </div>
+                  </div>
                 )}
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  value={imeiInput}
-                  onChange={(e) => setImeiInput(e.target.value)}
-                  placeholder="Enter or scan IMEI..."
-                  className="font-mono"
-                  onKeyDown={(e) => e.key === "Enter" && (isBulkMode ? handleBulkAdd() : handleSingleValidate())}
-                  disabled={showCamera}
-                />
-                {isBulkMode ? (
-                  <Button onClick={handleBulkAdd} disabled={isValidating || showCamera}>
-                    {isValidating ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+
+                {/* Step 1: Scan IMEI */}
+                <div className="space-y-3">
+                  <Label className="flex items-center gap-2">
+                    <ScanBarcode className="h-4 w-4 text-primary" />
+                    Step 1: Scan IMEI {isBulkMode && `(${bulkItems.length} items added)`}
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={imeiInput}
+                      onChange={(e) => setImeiInput(e.target.value)}
+                      placeholder="Enter or scan IMEI..."
+                      className="font-mono h-12 bg-muted/50 border-border/50"
+                      onKeyDown={(e) => e.key === "Enter" && (isBulkMode ? handleBulkAdd() : handleSingleValidate())}
+                      disabled={showCamera}
+                    />
+                    {isBulkMode ? (
+                      <>
+                        <Button variant="outline" size="icon" className="h-12 w-12" onClick={showCamera ? stopCamera : startCamera}>
+                          <Camera className="h-4 w-4" />
+                        </Button>
+                        <Button onClick={handleBulkAdd} disabled={isValidating || showCamera} className="h-12">
+                          {isValidating ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Plus className="h-4 w-4 mr-1" />Add</>}
+                        </Button>
+                      </>
                     ) : (
                       <>
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add
+                        <Button variant="outline" size="icon" className="h-12 w-12" onClick={showCamera ? stopCamera : startCamera}>
+                          <Camera className="h-4 w-4" />
+                        </Button>
+                        <Button onClick={handleSingleValidate} disabled={isValidating} className="h-12">
+                          {isValidating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verify"}
+                        </Button>
                       </>
                     )}
-                  </Button>
-                ) : (
-                  <>
-                    <Button 
-                      variant="outline" 
-                      size="icon"
-                      onClick={showCamera ? stopCamera : startCamera}
-                      className={cn(showCamera && "bg-destructive text-destructive-foreground")}
-                    >
-                      <Camera className="h-4 w-4" />
-                    </Button>
-                    <Button onClick={handleSingleValidate} disabled={isValidating}>
-                      {isValidating ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        "Verify"
-                      )}
-                    </Button>
-                  </>
-                )}
-              </div>
+                  </div>
 
-              {/* Bulk Items List */}
-              {isBulkMode && bulkItems.length > 0 && (
-                <ScrollArea className="max-h-48">
-                  <div className="space-y-2">
-                    {bulkItems.map((item, index) => (
-                      <div
-                        key={item.id}
-                        className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs text-muted-foreground font-medium">
-                            #{index + 1}
-                          </span>
-                          <div>
-                            <p className="font-medium text-sm">
-                              {item.product.name} {item.product.color && `(${item.product.color})`}
-                            </p>
-                            <p className="text-xs font-mono text-muted-foreground">{item.imei}</p>
+                  {/* Bulk Items List */}
+                  {isBulkMode && bulkItems.length > 0 && (
+                    <ScrollArea className="max-h-40">
+                      <div className="space-y-2">
+                        {bulkItems.map((item, index) => (
+                          <div key={item.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border/50">
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs text-muted-foreground font-medium">#{index + 1}</span>
+                              <div>
+                                <p className="font-medium text-sm">{item.product.name} {item.product.color && `(${item.product.color})`}</p>
+                                <p className="text-xs font-mono text-muted-foreground">{item.imei}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {item.outlet && <Badge variant="outline" className="text-xs">{item.outlet.code}</Badge>}
+                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeBulkItem(item.id)}>
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {item.outlet && (
-                            <Badge variant="outline" className="text-xs">
-                              {item.outlet.code}
-                            </Badge>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={() => removeBulkItem(item.id)}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              )}
+                    </ScrollArea>
+                  )}
 
-              {/* Single Item Display */}
-              {!isBulkMode && stockItem && (
-                <div className="p-4 rounded-lg bg-muted/50 border space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">
-                        {stockItem.product.name} {stockItem.product.color && `(${stockItem.product.color})`}
-                      </p>
-                      <p className="text-sm font-mono text-muted-foreground">{stockItem.imei}</p>
-                    </div>
-                    <Badge variant="outline" className="border-success text-success">
-                      <Check className="h-3 w-3 mr-1" />
-                      Verified
-                    </Badge>
-                  </div>
-                  {stockItem.outlet && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Store className="h-4 w-4" />
-                      Currently at: <span className="font-medium text-foreground">{stockItem.outlet.name}</span>
+                  {/* Single Item Display */}
+                  {!isBulkMode && stockItem && (
+                    <div className="p-4 rounded-lg bg-muted/50 border border-border/50 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">{stockItem.product.name} {stockItem.product.color && `(${stockItem.product.color})`}</p>
+                          <p className="text-sm font-mono text-muted-foreground">{stockItem.imei}</p>
+                        </div>
+                        <Badge variant="outline" className="border-success text-success">
+                          <Check className="h-3 w-3 mr-1" />Verified
+                        </Badge>
+                      </div>
+                      {stockItem.outlet && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Store className="h-4 w-4" />
+                          Currently at: <span className="font-medium text-foreground">{stockItem.outlet.name}</span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              )}
-            </div>
 
-            {/* Step 2: Select Destination */}
-            <div className="space-y-3">
-              <Label className="flex items-center gap-2">
-                <Store className="h-4 w-4" />
-                Step 2: Select Destination Outlet
-              </Label>
-              <Popover open={toOutletOpen} onOpenChange={setToOutletOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    disabled={isBulkMode ? bulkItems.length === 0 : !stockItem}
-                    className="w-full justify-between h-12"
-                  >
-                    {toOutlet ? (
-                      <span>{toOutlet.name} ({toOutlet.code})</span>
-                    ) : (
-                      <span className="text-muted-foreground">Select destination...</span>
-                    )}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-full p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="Search outlets..." />
-                    <CommandList>
-                      <CommandEmpty>No outlets found.</CommandEmpty>
-                      <CommandGroup>
-                        {outlets.map((outlet) => (
-                          <CommandItem
-                            key={outlet.id}
-                            value={`${outlet.name} ${outlet.code}`}
-                            onSelect={() => {
-                              setToOutlet(outlet);
-                              setToOutletOpen(false);
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                toOutlet?.id === outlet.id ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            <div>
-                              <p className="font-medium">{outlet.name}</p>
-                              <p className="text-xs text-muted-foreground">Code: {outlet.code}</p>
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {/* Transfer Preview - Bulk Mode */}
-            {isBulkMode && bulkItems.length > 0 && toOutlet && (
-              <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
-                <p className="text-sm text-muted-foreground mb-2">Bulk Transfer Preview</p>
-                <div className="flex items-center justify-center gap-4">
-                  <div className="text-center">
-                    <Badge variant="outline">{bulkItems.length} items</Badge>
-                    <p className="text-xs text-muted-foreground mt-1">Multiple outlets</p>
-                  </div>
-                  <ArrowRight className="h-5 w-5 text-primary" />
-                  <div className="text-center">
-                    <Badge className="bg-primary">{toOutlet.code}</Badge>
-                    <p className="text-xs text-muted-foreground mt-1">{toOutlet.name}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Transfer Preview - Single Mode */}
-            {!isBulkMode && stockItem && toOutlet && (
-              <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
-                <p className="text-sm text-muted-foreground mb-2">Transfer Preview</p>
-                <div className="flex items-center justify-center gap-4">
-                  <div className="text-center">
-                    <Badge variant="outline">{stockItem.outlet?.code || "N/A"}</Badge>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {stockItem.outlet?.name || "Unknown"}
-                    </p>
-                  </div>
-                  <ArrowRight className="h-5 w-5 text-primary" />
-                  <div className="text-center">
-                    <Badge className="bg-primary">{toOutlet.code}</Badge>
-                    <p className="text-xs text-muted-foreground mt-1">{toOutlet.name}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Notes */}
-            <div className="space-y-2">
-              <Label>Notes (Optional)</Label>
-              <Textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Reason for transfer..."
-                rows={2}
-                disabled={isBulkMode ? bulkItems.length === 0 : !stockItem}
-              />
-            </div>
-
-            {/* Transfer Button */}
-            {isBulkMode ? (
-              <Button
-                onClick={handleBulkTransfer}
-                disabled={!canBulkTransfer || isTransferring}
-                className="w-full h-12 gradient-primary"
-              >
-                {isTransferring ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Transferring {bulkItems.length} items...
-                  </>
-                ) : (
-                  <>
-                    <Layers className="h-4 w-4 mr-2" />
-                    Transfer {bulkItems.length} Items
-                  </>
-                )}
-              </Button>
-            ) : (
-              <Button
-                onClick={handleTransfer}
-                disabled={!canTransfer || isTransferring}
-                className="w-full h-12 gradient-primary"
-              >
-                {isTransferring ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Transferring...
-                  </>
-                ) : (
-                  <>
-                    <ArrowRightLeft className="h-4 w-4 mr-2" />
-                    Complete Transfer
-                  </>
-                )}
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Recent Transfers */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Transfers</CardTitle>
-            <CardDescription>Latest stock movements between outlets</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ScrollArea className="h-[500px]">
-              {isLoadingTransfers ? (
-                <div className="flex items-center justify-center py-10">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                </div>
-              ) : recentTransfers.length === 0 ? (
-                <div className="text-center py-10 text-muted-foreground">
-                  <ArrowRightLeft className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No transfers yet</p>
-                </div>
-              ) : (
+                {/* Step 2: Select Destination */}
                 <div className="space-y-3">
-                  {recentTransfers.map((transfer) => (
-                    <div
-                      key={transfer.id}
-                      className="p-4 rounded-lg bg-muted/50 border space-y-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium text-sm">
-                            {transfer.stock_log.product.name}
-                          </p>
-                          <p className="text-xs font-mono text-muted-foreground">
-                            {transfer.stock_log.imei}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {transfer.status === "in_transit" ? (
-                            <Badge variant="secondary" className="text-xs">
-                              In Transit
-                            </Badge>
-                          ) : transfer.status === "completed" ? (
-                            <Badge variant="default" className="text-xs bg-green-600">
-                              Completed
-                            </Badge>
-                          ) : (
-                            <Badge variant="destructive" className="text-xs">
-                              Cancelled
-                            </Badge>
-                          )}
-                          <p className="text-xs text-muted-foreground">
-                            {formatDistanceToNow(new Date(transfer.created_at), { addSuffix: true })}
-                          </p>
-                        </div>
+                  <Label className="flex items-center gap-2">
+                    <Store className="h-4 w-4 text-primary" />
+                    Step 2: Select Destination Outlet
+                  </Label>
+                  <Popover open={toOutletOpen} onOpenChange={setToOutletOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        disabled={isBulkMode ? bulkItems.length === 0 : !stockItem}
+                        className="w-full justify-between h-12 border-border/50"
+                      >
+                        {toOutlet ? <span>{toOutlet.name} ({toOutlet.code})</span> : <span className="text-muted-foreground">Select destination...</span>}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search outlets..." />
+                        <CommandList>
+                          <CommandEmpty>No outlets found.</CommandEmpty>
+                          <CommandGroup>
+                            {outlets.map((outlet) => (
+                              <CommandItem
+                                key={outlet.id}
+                                value={`${outlet.name} ${outlet.code}`}
+                                onSelect={() => { setToOutlet(outlet); setToOutletOpen(false); }}
+                              >
+                                <Check className={cn("mr-2 h-4 w-4", toOutlet?.id === outlet.id ? "opacity-100" : "opacity-0")} />
+                                <div>
+                                  <p className="font-medium">{outlet.name}</p>
+                                  <p className="text-xs text-muted-foreground">Code: {outlet.code}</p>
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {/* Transfer Preview */}
+                {((isBulkMode && bulkItems.length > 0 && toOutlet) || (!isBulkMode && stockItem && toOutlet)) && (
+                  <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
+                    <p className="text-sm text-muted-foreground mb-2">Transfer Preview</p>
+                    <div className="flex items-center justify-center gap-4">
+                      <div className="text-center">
+                        <Badge variant="outline">{isBulkMode ? `${bulkItems.length} items` : stockItem?.outlet?.code || "N/A"}</Badge>
+                        <p className="text-xs text-muted-foreground mt-1">{isBulkMode ? "Multiple outlets" : stockItem?.outlet?.name || "Unknown"}</p>
                       </div>
-                      <div className="flex items-center gap-2 text-sm">
-                        <Badge variant="outline">{transfer.from_outlet.code}</Badge>
-                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                        <Badge className="bg-primary">{transfer.to_outlet.code}</Badge>
-                      </div>
-                      {transfer.notes && (
-                        <p className="text-xs text-muted-foreground">{transfer.notes}</p>
-                      )}
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-muted-foreground">
-                          By: {transfer.transferred_by_profile?.full_name || "Unknown"}
-                        </p>
-                        {transfer.status === "in_transit" && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                            onClick={() => handleCancelTransfer(transfer.id)}
-                            disabled={cancellingId === transfer.id}
-                          >
-                            {cancellingId === transfer.id ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <>
-                                <Ban className="h-3 w-3 mr-1" />
-                                Cancel
-                              </>
-                            )}
-                          </Button>
-                        )}
+                      <ArrowRight className="h-5 w-5 text-primary" />
+                      <div className="text-center">
+                        <Badge className="bg-primary">{toOutlet.code}</Badge>
+                        <p className="text-xs text-muted-foreground mt-1">{toOutlet.name}</p>
                       </div>
                     </div>
-                  ))}
+                  </div>
+                )}
+
+                {/* Notes */}
+                <div className="space-y-2">
+                  <Label>Notes (Optional)</Label>
+                  <Textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Reason for transfer..."
+                    rows={2}
+                    disabled={isBulkMode ? bulkItems.length === 0 : !stockItem}
+                    className="bg-muted/50 border-border/50"
+                  />
                 </div>
-              )}
-            </ScrollArea>
-          </CardContent>
-        </Card>
+
+                {/* Transfer Button */}
+                <Button
+                  onClick={isBulkMode ? handleBulkTransfer : handleTransfer}
+                  disabled={isBulkMode ? !canBulkTransfer || isTransferring : !canTransfer || isTransferring}
+                  className="w-full h-12 gradient-primary text-primary-foreground"
+                >
+                  {isTransferring ? (
+                    <><Loader2 className="h-4 w-4 animate-spin mr-2" />Transferring...</>
+                  ) : isBulkMode ? (
+                    <><Layers className="h-4 w-4 mr-2" />Transfer {bulkItems.length} Items</>
+                  ) : (
+                    <><ArrowRightLeft className="h-4 w-4 mr-2" />Complete Transfer</>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Recent Transfers */}
+          <motion.div variants={staggerItem}>
+            <Card className="bg-card/80 backdrop-blur border-border/50 h-full">
+              <CardHeader className="pb-3">
+                <CardTitle>Recent Transfers</CardTitle>
+                <CardDescription>Latest stock movements between outlets</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[500px]">
+                  {isLoadingTransfers ? (
+                    <div className="flex items-center justify-center py-10">
+                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : recentTransfers.length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground">
+                      <ArrowRightLeft className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>No transfers yet</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {recentTransfers.map((transfer) => (
+                        <div key={transfer.id} className="p-4 rounded-lg bg-muted/50 border border-border/50 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium text-sm">{transfer.stock_log.product.name}</p>
+                              <p className="text-xs font-mono text-muted-foreground">{transfer.stock_log.imei}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {transfer.status === "in_transit" ? (
+                                <Badge variant="secondary" className="text-xs">In Transit</Badge>
+                              ) : transfer.status === "completed" ? (
+                                <Badge variant="default" className="text-xs bg-green-600">Completed</Badge>
+                              ) : (
+                                <Badge variant="destructive" className="text-xs">Cancelled</Badge>
+                              )}
+                              <p className="text-xs text-muted-foreground">
+                                {formatDistanceToNow(new Date(transfer.created_at), { addSuffix: true })}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <Badge variant="outline">{transfer.from_outlet.code}</Badge>
+                            <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                            <Badge className="bg-primary">{transfer.to_outlet.code}</Badge>
+                          </div>
+                          {transfer.notes && <p className="text-xs text-muted-foreground">{transfer.notes}</p>}
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-muted-foreground">By: {transfer.transferred_by_profile?.full_name || "Unknown"}</p>
+                            {transfer.status === "in_transit" && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => handleCancelTransfer(transfer.id)}
+                                disabled={cancellingId === transfer.id}
+                              >
+                                {cancellingId === transfer.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Ban className="h-3 w-3 mr-1" />Cancel</>}
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </div>
       </div>
-    </div>
+    </PageTransition>
   );
 }
