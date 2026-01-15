@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import { useMode } from "@/contexts/ModeContext";
 import { supabase } from "@/integrations/supabase/client";
+import { PageTransition, staggerContainer, staggerItem } from "@/components/PageTransition";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,16 +17,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { toast } from "sonner";
-import { Store, Plus, Pencil, MapPin, Phone, Loader2 } from "lucide-react";
+import { Store, Plus, Pencil, MapPin, Phone, Loader2, Building2, CheckCircle, XCircle } from "lucide-react";
 
 interface Outlet {
   id: string;
@@ -44,7 +38,6 @@ export default function OutletsPage() {
   const [editingOutlet, setEditingOutlet] = useState<Outlet | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Form state
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [address, setAddress] = useState("");
@@ -56,10 +49,7 @@ export default function OutletsPage() {
 
   const fetchOutlets = async () => {
     setIsLoading(true);
-    const { data, error } = await supabase
-      .from("outlets")
-      .select("*")
-      .order("name");
+    const { data, error } = await supabase.from("outlets").select("*").order("name");
     
     if (error) {
       toast.error("Failed to load outlets");
@@ -96,7 +86,6 @@ export default function OutletsPage() {
     setIsSaving(true);
 
     if (editingOutlet) {
-      // Update existing outlet
       const { error } = await supabase
         .from("outlets")
         .update({
@@ -115,7 +104,6 @@ export default function OutletsPage() {
         fetchOutlets();
       }
     } else {
-      // Create new outlet
       const { error } = await supabase
         .from("outlets")
         .insert({
@@ -156,213 +144,240 @@ export default function OutletsPage() {
     }
   };
 
+  const activeCount = outlets.filter(o => o.is_active).length;
+  const inactiveCount = outlets.filter(o => !o.is_active).length;
+
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Outlet Management</h1>
-          <p className="text-muted-foreground">Manage store locations and outlets</p>
-        </div>
-        <Button onClick={openCreateDialog} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Add Outlet
-        </Button>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Outlets
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{outlets.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Active Outlets
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-success">
-              {outlets.filter((o) => o.is_active).length}
+    <PageTransition>
+      <div className="h-full flex flex-col gap-6">
+        {/* Header */}
+        <motion.div 
+          variants={staggerItem}
+          className="flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+        >
+          <div className="flex items-center gap-4">
+            <div className="h-14 w-14 rounded-2xl gradient-primary flex items-center justify-center shadow-lg glow-primary">
+              <Building2 className="h-7 w-7 text-primary-foreground" />
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Inactive Outlets
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-muted-foreground">
-              {outlets.filter((o) => !o.is_active).length}
+            <div>
+              <h1 className="text-2xl lg:text-3xl font-bold">Outlet Management</h1>
+              <p className="text-muted-foreground">Manage store locations and outlets</p>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+          <Button onClick={openCreateDialog} size="lg" className="gradient-primary text-primary-foreground h-12 px-6">
+            <Plus className="h-5 w-5 mr-2" />
+            Add Outlet
+          </Button>
+        </motion.div>
 
-      {/* Outlets Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Store className="h-5 w-5" />
-            All Outlets
-          </CardTitle>
-          <CardDescription>
-            Click on an outlet to edit its details
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+        {/* Stats Cards */}
+        <motion.div 
+          variants={staggerContainer}
+          initial="initial"
+          animate="animate"
+          className="grid grid-cols-3 gap-4"
+        >
+          <motion.div variants={staggerItem}>
+            <Card className="bg-card/80 backdrop-blur border-border/50 overflow-hidden relative">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent" />
+              <CardContent className="p-5 relative">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-muted-foreground text-sm font-medium">Total Outlets</p>
+                    <p className="text-4xl font-bold text-foreground mt-1">{outlets.length}</p>
+                  </div>
+                  <div className="h-12 w-12 rounded-xl bg-primary/20 flex items-center justify-center">
+                    <Store className="h-6 w-6 text-primary" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div variants={staggerItem}>
+            <Card className="bg-card/80 backdrop-blur border-border/50 overflow-hidden relative">
+              <div className="absolute inset-0 bg-gradient-to-br from-success/10 to-transparent" />
+              <CardContent className="p-5 relative">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-muted-foreground text-sm font-medium">Active</p>
+                    <p className="text-4xl font-bold text-success mt-1">{activeCount}</p>
+                  </div>
+                  <div className="h-12 w-12 rounded-xl bg-success/20 flex items-center justify-center">
+                    <CheckCircle className="h-6 w-6 text-success" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div variants={staggerItem}>
+            <Card className="bg-card/80 backdrop-blur border-border/50 overflow-hidden relative">
+              <div className="absolute inset-0 bg-gradient-to-br from-muted/50 to-transparent" />
+              <CardContent className="p-5 relative">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-muted-foreground text-sm font-medium">Inactive</p>
+                    <p className="text-4xl font-bold text-muted-foreground mt-1">{inactiveCount}</p>
+                  </div>
+                  <div className="h-12 w-12 rounded-xl bg-muted flex items-center justify-center">
+                    <XCircle className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </motion.div>
+
+        {/* Outlets Grid */}
+        <motion.div variants={staggerItem} className="flex-1 overflow-auto">
           {isLoading ? (
-            <div className="flex items-center justify-center py-10">
+            <div className="flex items-center justify-center py-20">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : outlets.length === 0 ? (
-            <div className="text-center py-10 text-muted-foreground">
-              <Store className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No outlets found. Create your first outlet to get started.</p>
+            <div className="text-center py-20 text-muted-foreground">
+              <Store className="h-16 w-16 mx-auto mb-4 opacity-50" />
+              <p className="text-lg font-medium">No outlets found</p>
+              <p className="text-sm">Create your first outlet to get started.</p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Code</TableHead>
-                  <TableHead className="hidden md:table-cell">Address</TableHead>
-                  <TableHead className="hidden md:table-cell">Phone</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {outlets.map((outlet) => (
-                  <TableRow key={outlet.id}>
-                    <TableCell className="font-medium">{outlet.name}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{outlet.code}</Badge>
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell">
-                      {outlet.address ? (
-                        <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                          <MapPin className="h-3 w-3" />
-                          {outlet.address}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {outlets.map((outlet) => (
+                <Card 
+                  key={outlet.id} 
+                  className={`bg-card/80 backdrop-blur border-border/50 hover:border-primary/50 transition-all duration-300 overflow-hidden ${!outlet.is_active && "opacity-60"}`}
+                >
+                  <CardContent className="p-0">
+                    <div className={`h-16 ${outlet.is_active ? "gradient-primary" : "bg-muted"} relative`}>
+                      <div className="absolute inset-0 bg-black/20" />
+                      <div className="absolute top-2 right-2">
+                        <Badge variant={outlet.is_active ? "default" : "secondary"} className="text-xs">
+                          {outlet.code}
+                        </Badge>
+                      </div>
+                      <div className="absolute -bottom-6 left-4">
+                        <div className={`h-12 w-12 rounded-xl ${outlet.is_active ? "bg-primary" : "bg-muted"} flex items-center justify-center shadow-lg border-4 border-card`}>
+                          <Store className="h-6 w-6 text-primary-foreground" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-10 pb-5 px-4 space-y-3">
+                      <h3 className="text-lg font-semibold text-foreground truncate">{outlet.name}</h3>
+                      
+                      {outlet.address && (
+                        <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                          <MapPin className="h-4 w-4 mt-0.5 shrink-0" />
+                          <span className="line-clamp-2">{outlet.address}</span>
+                        </div>
                       )}
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell">
-                      {outlet.phone ? (
-                        <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                          <Phone className="h-3 w-3" />
-                          {outlet.phone}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
+
+                      {outlet.phone && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Phone className="h-4 w-4" />
+                          <span>{outlet.phone}</span>
+                        </div>
                       )}
-                    </TableCell>
-                    <TableCell>
-                      <Switch
-                        checked={outlet.is_active}
-                        onCheckedChange={() => toggleActive(outlet)}
-                      />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => openEditDialog(outlet)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={outlet.is_active}
+                            onCheckedChange={() => toggleActive(outlet)}
+                          />
+                          <span className="text-xs text-muted-foreground">
+                            {outlet.is_active ? "Active" : "Inactive"}
+                          </span>
+                        </div>
+                        <Button variant="ghost" size="icon" onClick={() => openEditDialog(outlet)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           )}
-        </CardContent>
-      </Card>
+        </motion.div>
 
-      {/* Create/Edit Dialog */}
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editingOutlet ? "Edit Outlet" : "Create New Outlet"}
-            </DialogTitle>
-            <DialogDescription>
-              {editingOutlet
-                ? "Update the outlet details below"
-                : "Fill in the details to create a new outlet"}
-            </DialogDescription>
-          </DialogHeader>
+        {/* Create/Edit Dialog */}
+        <Dialog open={showDialog} onOpenChange={setShowDialog}>
+          <DialogContent className="bg-card border-border">
+            <DialogHeader className="text-center pb-4">
+              <div className="mx-auto h-16 w-16 rounded-2xl gradient-primary flex items-center justify-center mb-4 shadow-lg">
+                <Store className="h-8 w-8 text-primary-foreground" />
+              </div>
+              <DialogTitle className="text-2xl">
+                {editingOutlet ? "Edit Outlet" : "Create New Outlet"}
+              </DialogTitle>
+              <DialogDescription>
+                {editingOutlet ? "Update the outlet details below" : "Fill in the details to create a new outlet"}
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Name *</Label>
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Main Store"
+                    className="h-12 bg-muted/50 border-border/50"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Code *</Label>
+                  <Input
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.toUpperCase())}
+                    placeholder="MAIN"
+                    maxLength={10}
+                    className="h-12 bg-muted/50 border-border/50"
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
-                <Label>Name *</Label>
+                <Label>Address</Label>
                 <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Main Store"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="123 Main Street, City"
+                  className="h-12 bg-muted/50 border-border/50"
                 />
               </div>
+
               <div className="space-y-2">
-                <Label>Code *</Label>
+                <Label>Phone</Label>
                 <Input
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.toUpperCase())}
-                  placeholder="MAIN"
-                  maxLength={10}
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+91 98765 43210"
+                  className="h-12 bg-muted/50 border-border/50"
                 />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>Address</Label>
-              <Input
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="123 Main Street, City"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Phone</Label>
-              <Input
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+91 98765 43210"
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDialog(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave} disabled={isSaving}>
-              {isSaving ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Saving...
-                </>
-              ) : editingOutlet ? (
-                "Update Outlet"
-              ) : (
-                "Create Outlet"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+            <DialogFooter className="gap-3">
+              <Button variant="outline" onClick={() => setShowDialog(false)} className="flex-1 h-12">
+                Cancel
+              </Button>
+              <Button onClick={handleSave} disabled={isSaving} className="flex-1 h-12 gradient-primary text-primary-foreground">
+                {isSaving ? (
+                  <><Loader2 className="h-4 w-4 animate-spin mr-2" />Saving...</>
+                ) : editingOutlet ? (
+                  "Update Outlet"
+                ) : (
+                  "Create Outlet"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </PageTransition>
   );
 }
