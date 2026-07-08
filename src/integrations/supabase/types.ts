@@ -131,6 +131,39 @@ export type Database = {
         }
         Relationships: []
       }
+      master_inventory: {
+        Row: {
+          barcode: string
+          color: string | null
+          created_at: string
+          id: string
+          model_name: string
+          price: number
+          ram: string | null
+          updated_at: string
+        }
+        Insert: {
+          barcode: string
+          color?: string | null
+          created_at?: string
+          id?: string
+          model_name: string
+          price?: number
+          ram?: string | null
+          updated_at?: string
+        }
+        Update: {
+          barcode?: string
+          color?: string | null
+          created_at?: string
+          id?: string
+          model_name?: string
+          price?: number
+          ram?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string
