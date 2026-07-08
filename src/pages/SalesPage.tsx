@@ -90,7 +90,7 @@ export default function SalesPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const barcodeDetectorRef = useRef<any>(null);
-  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const scanIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Customer state
   const [phoneSearch, setPhoneSearch] = useState("");
