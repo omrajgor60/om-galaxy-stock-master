@@ -53,6 +53,7 @@ const adminLinks = [
   { to: "/sales", label: "Sales", icon: ShoppingCart },
   { to: "/customers", label: "Customers", icon: Users },
   { to: "/inventory", label: "Inventory", icon: Package },
+  { to: "/master-inventory", label: "Master Items", icon: ScanBarcode },
   { to: "/transfers", label: "Transfers", icon: ArrowRightLeft },
   { to: "/incoming-stock", label: "Incoming", icon: ArrowDown },
   { to: "/outlet-reports", label: "Reports", icon: BarChart3 },

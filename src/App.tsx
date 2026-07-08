@@ -11,6 +11,7 @@ import ScannerPage from "@/pages/ScannerPage";
 import SalesPage from "@/pages/SalesPage";
 import CustomersPage from "@/pages/CustomersPage";
 import InventoryPage from "@/pages/InventoryPage";
+import MasterInventoryPage from "@/pages/MasterInventoryPage";
 import StaffPage from "@/pages/StaffPage";
 import RequestsPage from "@/pages/RequestsPage";
 import ExportPage from "@/pages/ExportPage";
@@ -39,6 +40,7 @@ const App = () => (
               <Route path="/scanner" element={<ScannerPage />} />
               <Route path="/sales" element={<SalesPage />} />
               <Route path="/inventory" element={<InventoryPage />} />
+              <Route path="/master-inventory" element={<MasterInventoryPage />} />
               <Route path="/transfers" element={<TransfersPage />} />
               <Route path="/incoming-stock" element={<IncomingStockPage />} />
               <Route path="/outlet-reports" element={<OutletReportsPage />} />
