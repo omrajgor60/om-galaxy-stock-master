@@ -448,7 +448,16 @@ export default function SalesPage() {
                     </div>
                     <div>
                       <CardTitle className="text-lg">Step 2: Product</CardTitle>
-                      <CardDescription>Select the product being sold</CardDescription>
+                      <CardDescription>
+                        {customer ? (
+                          <span className="flex items-center gap-1">
+                            <User className="h-3 w-3" />
+                            Selling to <span className="font-medium text-foreground">{customer.name}</span>
+                          </span>
+                        ) : (
+                          "Select the product being sold"
+                        )}
+                      </CardDescription>
                     </div>
                   </div>
                   {selectedProduct && (
