@@ -493,7 +493,14 @@ export default function MasterInventoryPage() {
                   {filtered.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                       <Package className="h-10 w-10 opacity-30 mb-3" />
-                      <p className="text-sm">No items yet</p>
+                      <p className="text-sm">
+                        {items.length === 0 ? "No items yet" : "No items match your filters"}
+                      </p>
+                      {items.length > 0 && activeFilterCount > 0 && (
+                        <Button variant="ghost" size="sm" onClick={clearFilters} className="mt-2">
+                          Clear filters
+                        </Button>
+                      )}
                     </div>
                   ) : (
                     <div className="space-y-2">
