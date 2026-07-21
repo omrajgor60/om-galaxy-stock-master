@@ -42,6 +42,10 @@ export default function MasterInventoryPage() {
   const [existingId, setExistingId] = useState<string | null>(null);
   const [items, setItems] = useState<MasterItem[]>([]);
   const [search, setSearch] = useState("");
+  const [filterModel, setFilterModel] = useState("");
+  const [filterRam, setFilterRam] = useState<string>("all");
+  const [filterColor, setFilterColor] = useState<string>("all");
+  const [showFilters, setShowFilters] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [saving, setSaving] = useState(false);
 
