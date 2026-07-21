@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { PageTransition, staggerItem } from "@/components/PageTransition";
@@ -8,8 +8,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
-import { ScanBarcode, Camera, X, Save, Plus, Package, Search, RefreshCw } from "lucide-react";
+import { ScanBarcode, Camera, X, Save, Plus, Package, Search, RefreshCw, SlidersHorizontal } from "lucide-react";
 
 interface MasterItem {
   id: string;
@@ -35,6 +42,10 @@ export default function MasterInventoryPage() {
   const [existingId, setExistingId] = useState<string | null>(null);
   const [items, setItems] = useState<MasterItem[]>([]);
   const [search, setSearch] = useState("");
+  const [filterModel, setFilterModel] = useState("");
+  const [filterRam, setFilterRam] = useState<string>("all");
+  const [filterColor, setFilterColor] = useState<string>("all");
+  const [showFilters, setShowFilters] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -204,16 +215,39 @@ export default function MasterInventoryPage() {
     setShowCamera(false);
   };
 
+  const uniqueRams = useMemo(
+    () => Array.from(new Set(items.map((it) => it.ram).filter(Boolean))).sort(),
+    [items]
+  );
+  const uniqueColors = useMemo(
+    () => Array.from(new Set(items.map((it) => it.color).filter(Boolean))).sort(),
+    [items]
+  );
+
   const filtered = items.filter((it) => {
     const q = search.trim().toLowerCase();
-    if (!q) return true;
-    return (
+    const modelQ = filterModel.trim().toLowerCase();
+    const matchesSearch =
+      !q ||
       it.barcode.toLowerCase().includes(q) ||
       it.model_name.toLowerCase().includes(q) ||
       (it.color || "").toLowerCase().includes(q) ||
-      (it.ram || "").toLowerCase().includes(q)
-    );
+      (it.ram || "").toLowerCase().includes(q);
+    const matchesModel = !modelQ || it.model_name.toLowerCase().includes(modelQ);
+    const matchesRam = filterRam === "all" || it.ram === filterRam;
+    const matchesColor = filterColor === "all" || it.color === filterColor;
+    return matchesSearch && matchesModel && matchesRam && matchesColor;
   });
+
+  const activeFilterCount =
+    (filterModel ? 1 : 0) + (filterRam !== "all" ? 1 : 0) + (filterColor !== "all" ? 1 : 0);
+
+  const clearFilters = () => {
+    setSearch("");
+    setFilterModel("");
+    setFilterRam("all");
+    setFilterColor("all");
+  };
 
   return (
     <PageTransition>
@@ -337,26 +371,136 @@ export default function MasterInventoryPage() {
           {/* Right: Recent Items */}
           <motion.div variants={staggerItem}>
             <Card className="bg-card/80 backdrop-blur border-border/50 h-full flex flex-col">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center justify-between">
-                  <span>Recent Items ({items.length})</span>
-                </CardTitle>
-                <div className="relative pt-2">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 mt-1 h-4 w-4 text-muted-foreground" />
+              <CardHeader className="pb-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg">Items ({filtered.length})</CardTitle>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowFilters((s) => !s)}
+                    className="gap-2 text-muted-foreground hover:text-foreground"
+                  >
+                    <SlidersHorizontal className="h-4 w-4" />
+                    Filters
+                    {activeFilterCount > 0 && (
+                      <Badge variant="default" className="ml-1 h-5 min-w-5 px-1.5 text-xs">
+                        {activeFilterCount}
+                      </Badge>
+                    )}
+                  </Button>
+                </div>
+
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search barcode, model, color..."
-                    className="h-10 pl-9"
+                    placeholder="Search barcode, model, color, RAM..."
+                    className="h-11 pl-9"
                   />
                 </div>
+
+                {showFilters && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1"
+                  >
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Model Name</Label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                        <Input
+                          value={filterModel}
+                          onChange={(e) => setFilterModel(e.target.value)}
+                          placeholder="Filter model..."
+                          className="h-10 pl-8"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">RAM</Label>
+                      <Select value={filterRam} onValueChange={setFilterRam}>
+                        <SelectTrigger className="h-10">
+                          <SelectValue placeholder="All RAM" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All RAM</SelectItem>
+                          {uniqueRams.map((ram) => (
+                            <SelectItem key={ram} value={ram as string}>
+                              {ram}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Color</Label>
+                      <Select value={filterColor} onValueChange={setFilterColor}>
+                        <SelectTrigger className="h-10">
+                          <SelectValue placeholder="All Colors" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Colors</SelectItem>
+                          {uniqueColors.map((color) => (
+                            <SelectItem key={color} value={color as string}>
+                              {color}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </motion.div>
+                )}
+
+                {activeFilterCount > 0 && (
+                  <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap gap-2">
+                      {filterModel && (
+                        <Badge variant="secondary" className="gap-1">
+                          Model: {filterModel}
+                          <button onClick={() => setFilterModel("")} className="ml-1 hover:text-primary">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      )}
+                      {filterRam !== "all" && (
+                        <Badge variant="secondary" className="gap-1">
+                          RAM: {filterRam}
+                          <button onClick={() => setFilterRam("all")} className="ml-1 hover:text-primary">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      )}
+                      {filterColor !== "all" && (
+                        <Badge variant="secondary" className="gap-1">
+                          Color: {filterColor}
+                          <button onClick={() => setFilterColor("all")} className="ml-1 hover:text-primary">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      )}
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={clearFilters} className="text-xs h-8">
+                      Clear all
+                    </Button>
+                  </div>
+                )}
               </CardHeader>
               <CardContent className="flex-1 overflow-hidden p-0">
                 <ScrollArea className="h-full px-6 pb-6">
                   {filtered.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                       <Package className="h-10 w-10 opacity-30 mb-3" />
-                      <p className="text-sm">No items yet</p>
+                      <p className="text-sm">
+                        {items.length === 0 ? "No items yet" : "No items match your filters"}
+                      </p>
+                      {items.length > 0 && activeFilterCount > 0 && (
+                        <Button variant="ghost" size="sm" onClick={clearFilters} className="mt-2">
+                          Clear filters
+                        </Button>
+                      )}
                     </div>
                   ) : (
                     <div className="space-y-2">
