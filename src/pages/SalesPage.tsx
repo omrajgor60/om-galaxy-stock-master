@@ -58,6 +58,7 @@ interface Customer {
   name: string;
   phone: string;
   email: string | null;
+  address?: string | null;
   total_spent: number;
   purchase_count: number;
 }
@@ -469,6 +470,24 @@ export default function SalesPage() {
                 </div>
               </CardHeader>
               <CardContent>
+                {customer && (
+                  <div className="mb-4 p-3 rounded-lg bg-muted/40 border border-border/50 space-y-1 text-sm">
+                    <div className="flex items-center gap-2">
+                      <User className="h-3.5 w-3.5 text-primary" />
+                      <span className="font-medium">{customer.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Phone className="h-3.5 w-3.5" />
+                      <span>{customer.phone}</span>
+                    </div>
+                    {customer.address && (
+                      <div className="flex items-start gap-2 text-muted-foreground">
+                        <Store className="h-3.5 w-3.5 mt-0.5" />
+                        <span>{customer.address}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <Popover open={productOpen} onOpenChange={setProductOpen}>
                   <PopoverTrigger asChild>
                     <Button
