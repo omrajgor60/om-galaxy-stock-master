@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ScanBarcode, Camera, X, Save, Plus, Package, Search, RefreshCw, Filter, SlidersHorizontal } from "lucide-react";
+import { ScanBarcode, Camera, X, Save, Plus, Package, Search, RefreshCw, SlidersHorizontal } from "lucide-react";
 
 interface MasterItem {
   id: string;
