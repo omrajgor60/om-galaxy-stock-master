@@ -215,16 +215,39 @@ export default function MasterInventoryPage() {
     setShowCamera(false);
   };
 
+  const uniqueRams = useMemo(
+    () => Array.from(new Set(items.map((it) => it.ram).filter(Boolean))).sort(),
+    [items]
+  );
+  const uniqueColors = useMemo(
+    () => Array.from(new Set(items.map((it) => it.color).filter(Boolean))).sort(),
+    [items]
+  );
+
   const filtered = items.filter((it) => {
     const q = search.trim().toLowerCase();
-    if (!q) return true;
-    return (
+    const modelQ = filterModel.trim().toLowerCase();
+    const matchesSearch =
+      !q ||
       it.barcode.toLowerCase().includes(q) ||
       it.model_name.toLowerCase().includes(q) ||
       (it.color || "").toLowerCase().includes(q) ||
-      (it.ram || "").toLowerCase().includes(q)
-    );
+      (it.ram || "").toLowerCase().includes(q);
+    const matchesModel = !modelQ || it.model_name.toLowerCase().includes(modelQ);
+    const matchesRam = filterRam === "all" || it.ram === filterRam;
+    const matchesColor = filterColor === "all" || it.color === filterColor;
+    return matchesSearch && matchesModel && matchesRam && matchesColor;
   });
+
+  const activeFilterCount =
+    (filterModel ? 1 : 0) + (filterRam !== "all" ? 1 : 0) + (filterColor !== "all" ? 1 : 0);
+
+  const clearFilters = () => {
+    setSearch("");
+    setFilterModel("");
+    setFilterRam("all");
+    setFilterColor("all");
+  };
 
   return (
     <PageTransition>
