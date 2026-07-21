@@ -58,6 +58,7 @@ interface Customer {
   name: string;
   phone: string;
   email: string | null;
+  address?: string | null;
   total_spent: number;
   purchase_count: number;
 }
