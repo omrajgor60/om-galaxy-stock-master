@@ -184,26 +184,36 @@ export default function DashboardPage() {
 
     const { data: leaderboardData } = await supabase
       .from("sales")
-      .select(`
-        sold_by,
-        sale_price,
-        profiles!sales_sold_by_fkey(full_name)
-      `)
+      .select("sold_by, sale_price")
       .gte("created_at", weekAgo.toISOString());
 
     const leaderboardMap: Record<string, LeaderboardEntry> = {};
     if (leaderboardData) {
+      const sellerIds = Array.from(
+        new Set(leaderboardData.map((s: any) => s.sold_by).filter(Boolean))
+      );
+      const nameById: Record<string, string> = {};
+      if (sellerIds.length > 0) {
+        const { data: profs } = await supabase
+          .from("profiles")
+          .select("user_id, full_name")
+          .in("user_id", sellerIds);
+        profs?.forEach((p: any) => {
+          nameById[p.user_id] = p.full_name || "Unknown";
+        });
+      }
       leaderboardData.forEach((sale: any) => {
-        if (!leaderboardMap[sale.sold_by]) {
-          leaderboardMap[sale.sold_by] = {
-            user_id: sale.sold_by,
-            full_name: sale.profiles?.full_name || "Unknown",
+        const key = sale.sold_by ?? "unknown";
+        if (!leaderboardMap[key]) {
+          leaderboardMap[key] = {
+            user_id: key,
+            full_name: sale.sold_by ? (nameById[sale.sold_by] || "Unknown") : "Unassigned",
             total_sales: 0,
             total_revenue: 0,
           };
         }
-        leaderboardMap[sale.sold_by].total_sales++;
-        leaderboardMap[sale.sold_by].total_revenue += Number(sale.sale_price);
+        leaderboardMap[key].total_sales++;
+        leaderboardMap[key].total_revenue += Number(sale.sale_price);
       });
     }
 
