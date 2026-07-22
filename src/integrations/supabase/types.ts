@@ -54,7 +54,7 @@ export type Database = {
         Row: {
           address: string | null
           created_at: string
-          created_by: string
+          created_by: string | null
           email: string | null
           id: string
           name: string
@@ -66,7 +66,7 @@ export type Database = {
         Insert: {
           address?: string | null
           created_at?: string
-          created_by: string
+          created_by?: string | null
           email?: string | null
           id?: string
           name: string
@@ -78,7 +78,7 @@ export type Database = {
         Update: {
           address?: string | null
           created_at?: string
-          created_by?: string
+          created_by?: string | null
           email?: string | null
           id?: string
           name?: string
@@ -313,7 +313,7 @@ export type Database = {
           payment_method: string | null
           product_id: string
           sale_price: number
-          sold_by: string
+          sold_by: string | null
           stock_log_id: string
         }
         Insert: {
@@ -326,7 +326,7 @@ export type Database = {
           payment_method?: string | null
           product_id: string
           sale_price: number
-          sold_by: string
+          sold_by?: string | null
           stock_log_id: string
         }
         Update: {
@@ -339,7 +339,7 @@ export type Database = {
           payment_method?: string | null
           product_id?: string
           sale_price?: number
-          sold_by?: string
+          sold_by?: string | null
           stock_log_id?: string
         }
         Relationships: [
@@ -415,7 +415,7 @@ export type Database = {
           outlet_id: string | null
           product_id: string
           scanned_at: string
-          scanned_by: string
+          scanned_by: string | null
           sold_at: string | null
           status: string
         }
@@ -426,7 +426,7 @@ export type Database = {
           outlet_id?: string | null
           product_id: string
           scanned_at?: string
-          scanned_by: string
+          scanned_by?: string | null
           sold_at?: string | null
           status?: string
         }
@@ -437,7 +437,7 @@ export type Database = {
           outlet_id?: string | null
           product_id?: string
           scanned_at?: string
-          scanned_by?: string
+          scanned_by?: string | null
           sold_at?: string | null
           status?: string
         }
@@ -469,7 +469,7 @@ export type Database = {
           status: string
           stock_log_id: string
           to_outlet_id: string
-          transferred_by: string
+          transferred_by: string | null
         }
         Insert: {
           accepted_at?: string | null
@@ -481,7 +481,7 @@ export type Database = {
           status?: string
           stock_log_id: string
           to_outlet_id: string
-          transferred_by: string
+          transferred_by?: string | null
         }
         Update: {
           accepted_at?: string | null
@@ -493,7 +493,7 @@ export type Database = {
           status?: string
           stock_log_id?: string
           to_outlet_id?: string
-          transferred_by?: string
+          transferred_by?: string | null
         }
         Relationships: [
           {
