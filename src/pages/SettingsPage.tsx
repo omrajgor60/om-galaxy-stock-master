@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useMode } from "@/contexts/ModeContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { PageTransition, staggerContainer, staggerItem } from "@/components/PageTransition";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -127,7 +128,7 @@ export default function SettingsPage() {
           category: category || null,
           color: color || null,
           specs: specs || null,
-          created_by: null,
+          created_by: user?.id ?? null,
         };
 
         const { data: existing } = await supabase
