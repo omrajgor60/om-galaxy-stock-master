@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useMode } from "@/contexts/ModeContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useSoundEffects } from "@/hooks/useSoundEffects";
 import { supabase } from "@/integrations/supabase/client";
 import { PageTransition, staggerContainer, staggerItem } from "@/components/PageTransition";
@@ -70,6 +71,7 @@ interface ScannedItem {
 
 export default function ScannerPage() {
   const { isAdmin } = useMode();
+  const { user } = useAuth();
   const { playSound } = useSoundEffects();
   const inputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -222,7 +224,7 @@ export default function ScannerPage() {
       .insert({
         product_id: selectedProduct.id,
         imei: pendingScan,
-        scanned_by: null,
+        scanned_by: user?.id ?? null,
         outlet_id: selectedOutlet.id,
         status: "in_stock",
       })

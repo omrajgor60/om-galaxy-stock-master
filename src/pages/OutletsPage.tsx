@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useMode } from "@/contexts/ModeContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { PageTransition, staggerContainer, staggerItem } from "@/components/PageTransition";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +33,7 @@ interface Outlet {
 
 export default function OutletsPage() {
   const { isAdmin } = useMode();
+  const { user } = useAuth();
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
@@ -111,7 +113,7 @@ export default function OutletsPage() {
           code: code.trim().toUpperCase(),
           address: address.trim() || null,
           phone: phone.trim() || null,
-          created_by: null,
+          created_by: user?.id ?? null,
         });
 
       if (error) {

@@ -3,9 +3,12 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider } from "@/contexts/AuthContext";
 import { ModeProvider } from "@/contexts/ModeContext";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import AppLayout from "@/components/layout/AppLayout";
 import AdminRoute from "@/components/AdminRoute";
+import AuthPage from "@/pages/AuthPage";
 import DashboardPage from "@/pages/DashboardPage";
 import ScannerPage from "@/pages/ScannerPage";
 import SalesPage from "@/pages/SalesPage";
@@ -30,11 +33,13 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <ModeProvider>
-          <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            
-            <Route element={<AppLayout />}>
+        <AuthProvider>
+          <ModeProvider>
+            <Routes>
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/auth" element={<AuthPage />} />
+
+              <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
               {/* Routes accessible to both Admin and Staff */}
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/scanner" element={<ScannerPage />} />
@@ -58,8 +63,9 @@ const App = () => (
             </Route>
             
             <Route path="*" element={<NotFound />} />
-          </Routes>
-        </ModeProvider>
+            </Routes>
+          </ModeProvider>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

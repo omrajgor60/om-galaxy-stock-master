@@ -1,46 +1,20 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { ReactNode } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 
 type AppMode = "admin" | "staff";
 
-interface ModeContextType {
-  mode: AppMode;
-  setMode: (mode: AppMode) => void;
-  isAdmin: boolean;
-}
-
-const ModeContext = createContext<ModeContextType | undefined>(undefined);
-
+// Backwards-compat adapter: `mode` is now derived from the authenticated user's role.
+// `setMode` is a no-op — role changes happen server-side via user_roles.
 export function ModeProvider({ children }: { children: ReactNode }) {
-  const [mode, setModeState] = useState<AppMode>(() => {
-    const saved = localStorage.getItem("app_mode");
-    return (saved as AppMode) || "admin";
-  });
-
-  useEffect(() => {
-    localStorage.setItem("app_mode", mode);
-  }, [mode]);
-
-  const setMode = (newMode: AppMode) => {
-    setModeState(newMode);
-  };
-
-  return (
-    <ModeContext.Provider
-      value={{
-        mode,
-        setMode,
-        isAdmin: mode === "admin",
-      }}
-    >
-      {children}
-    </ModeContext.Provider>
-  );
+  return <>{children}</>;
 }
 
-export function useMode() {
-  const context = useContext(ModeContext);
-  if (context === undefined) {
-    throw new Error("useMode must be used within a ModeProvider");
-  }
-  return context;
+export function useMode(): { mode: AppMode; setMode: (m: AppMode) => void; isAdmin: boolean } {
+  const { role } = useAuth();
+  const mode: AppMode = role === "admin" ? "admin" : "staff";
+  return {
+    mode,
+    setMode: () => {},
+    isAdmin: role === "admin",
+  };
 }

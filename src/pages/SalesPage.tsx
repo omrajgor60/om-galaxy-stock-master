@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useMode } from "@/contexts/ModeContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { PageTransition, staggerContainer, staggerItem } from "@/components/PageTransition";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -87,6 +88,7 @@ interface Outlet {
 
 export default function SalesPage() {
   const { isAdmin } = useMode();
+  const { user } = useAuth();
   const { playSound } = useSoundEffects();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -178,7 +180,7 @@ export default function SalesPage() {
         name: newCustomerName.trim(),
         phone: phoneSearch.trim(),
         email: newCustomerEmail.trim() || null,
-        created_by: null,
+        created_by: user?.id ?? null,
       })
       .select()
       .single();
@@ -286,7 +288,7 @@ export default function SalesPage() {
         stock_log_id: stockItem.id,
         customer_id: customer.id,
         product_id: selectedProduct.id,
-        sold_by: null,
+        sold_by: user?.id ?? null,
         sale_price: parseFloat(salePrice) || selectedProduct.price,
         discount: parseFloat(discount) || 0,
         commission: parseFloat(commission) || 0,

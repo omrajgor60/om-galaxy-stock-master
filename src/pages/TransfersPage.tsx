@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { useMode } from "@/contexts/ModeContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { PageTransition, staggerContainer, staggerItem } from "@/components/PageTransition";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -93,6 +94,7 @@ interface Transfer {
 
 export default function TransfersPage() {
   const { isAdmin } = useMode();
+  const { user } = useAuth();
   const { playSound } = useSoundEffects();
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -342,7 +344,7 @@ export default function TransfersPage() {
           stock_log_id: stockItem.id,
           from_outlet_id: stockItem.outlet_id,
           to_outlet_id: toOutlet.id,
-          transferred_by: null,
+          transferred_by: user?.id ?? null,
           notes: notes.trim() || null,
           status: "in_transit",
         });
@@ -384,7 +386,7 @@ export default function TransfersPage() {
         stock_log_id: item.id,
         from_outlet_id: item.outlet_id,
         to_outlet_id: toOutlet.id,
-        transferred_by: null,
+        transferred_by: user?.id ?? null,
         notes: notes.trim() || null,
         status: "in_transit",
       }));
