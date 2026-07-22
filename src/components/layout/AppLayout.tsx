@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Outlet, NavLink, useLocation } from "react-router-dom";
 import { useMode } from "@/contexts/ModeContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { useNotifications } from "@/hooks/useNotifications";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
+  LogOut,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -128,40 +130,32 @@ function SyncIndicator() {
   );
 }
 
-function ModeToggle() {
-  const { mode, setMode } = useMode();
-
+function UserMenu() {
+  const { user, profile, isAdmin, signOut } = useAuth();
+  const label = profile?.full_name || user?.email || "Account";
   return (
-    <div className="flex items-center bg-muted/50 rounded-xl p-1 border border-border/50">
-      <Button
-        variant="ghost"
-        size="sm"
-        className={cn(
-          "h-9 px-4 gap-2 rounded-lg transition-all",
-          mode === "admin" 
-            ? "gradient-primary text-primary-foreground shadow-lg" 
-            : "hover:bg-muted"
-        )}
-        onClick={() => setMode("admin")}
-      >
-        <Shield className="h-4 w-4" />
-        <span className="hidden sm:inline font-medium">Admin</span>
-      </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        className={cn(
-          "h-9 px-4 gap-2 rounded-lg transition-all",
-          mode === "staff" 
-            ? "gradient-primary text-primary-foreground shadow-lg" 
-            : "hover:bg-muted"
-        )}
-        onClick={() => setMode("staff")}
-      >
-        <User className="h-4 w-4" />
-        <span className="hidden sm:inline font-medium">Staff</span>
-      </Button>
-    </div>
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="sm" className="h-10 gap-2 px-3 rounded-xl hover:bg-muted/50">
+          {isAdmin ? <Shield className="h-4 w-4 text-primary" /> : <User className="h-4 w-4 text-primary" />}
+          <span className="hidden sm:inline text-sm font-medium max-w-[140px] truncate">{label}</span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 bg-card/95 backdrop-blur-xl border-border/50" align="end">
+        <div className="space-y-3">
+          <div>
+            <p className="text-sm font-semibold truncate">{label}</p>
+            <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+            <Badge variant="outline" className="text-xs mt-2">
+              {isAdmin ? "Administrator" : "Staff"}
+            </Badge>
+          </div>
+          <Button variant="outline" size="sm" onClick={signOut} className="w-full gap-2">
+            <LogOut className="h-4 w-4" /> Sign out
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -435,10 +429,8 @@ export default function AppLayout() {
             {/* Right side actions */}
             <div className="flex items-center gap-2 ml-auto">
               <SyncIndicator />
-              <div className="hidden sm:block">
-                <ModeToggle />
-              </div>
               <NotificationBell />
+              <UserMenu />
             </div>
           </div>
         </header>
