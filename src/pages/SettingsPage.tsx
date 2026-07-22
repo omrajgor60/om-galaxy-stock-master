@@ -31,6 +31,7 @@ interface ImportResult {
 
 export default function SettingsPage() {
   const { isAdmin } = useMode();
+  const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);

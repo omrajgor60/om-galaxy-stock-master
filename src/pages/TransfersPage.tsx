@@ -94,6 +94,7 @@ interface Transfer {
 
 export default function TransfersPage() {
   const { isAdmin } = useMode();
+  const { user } = useAuth();
   const { playSound } = useSoundEffects();
 
   const videoRef = useRef<HTMLVideoElement>(null);

@@ -71,6 +71,7 @@ interface ScannedItem {
 
 export default function ScannerPage() {
   const { isAdmin } = useMode();
+  const { user } = useAuth();
   const { playSound } = useSoundEffects();
   const inputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);

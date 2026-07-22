@@ -33,6 +33,7 @@ interface Outlet {
 
 export default function OutletsPage() {
   const { isAdmin } = useMode();
+  const { user } = useAuth();
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
